@@ -1,156 +1,88 @@
-//! Self-verifying CI demonstration. `cargo run --example ci_selfcheck`.
+//! `cargo run --example ci_selfcheck`
 //!
-//! Two jobs in one: (1) *exercise* most of the public surface so the real
-//! GitHub run shows annotations, grouped logs and a rich job summary; (2)
-//! *verify* by reading the runner's environment files back and asserting our
-//! bytes are there. All logic is Rust — no shell, no `${{ }}`, identical on
-//! every OS. Exits 1 on the first failed check; locally (no `GITHUB_*`) the
-//! file-readback assertions are skipped, not failed.
+//! Prints the actual artifacts the crate emits (raw, verbatim), then writes a
+//! job summary that is those same artifacts formatted as code blocks. No
+//! prose, no "OK", no "verified" — just the real bytes, twice: raw in the log
+//! and rendered in the summary. Exits 1 only on a real mismatch.
 
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use actions_rs::summary::Cell;
-use actions_rs::{Annotation, Summary, env, log, output};
+use actions_rs::{Annotation, AnnotationKind, Summary, output};
 
 fn read_env_file(var: &str) -> Option<String> {
-    let path = PathBuf::from(std::env::var_os(var)?);
-    std::fs::read_to_string(path).ok()
-}
-
-/// `Ok(true)` = verified, `Ok(false)` = skipped (local), `Err` = mismatch.
-fn check(var: &str, needles: &[&str]) -> Result<bool, String> {
-    let Some(contents) = read_env_file(var) else {
-        return Ok(false);
-    };
-    for needle in needles {
-        if !contents.contains(needle) {
-            return Err(format!("{var} missing {needle:?}; got:\n{contents}"));
-        }
-    }
-    Ok(true)
+    std::fs::read_to_string(PathBuf::from(std::env::var_os(var)?)).ok()
 }
 
 fn main() -> ExitCode {
-    // --- 1. exercise the surface (visible in the CI run) ---
-    log::group("environment", || {
-        log::info(format!("github_actions = {}", env::is_github_actions()));
-        log::info(format!("ci             = {}", env::is_ci()));
-        log::info(format!("runner os      = {:?}", env::RunnerOs::from_env()));
-        let ctx = actions_rs::Context::new();
-        log::info(format!("repository     = {:?}", ctx.repository()));
-        log::info(format!("ref            = {:?}", ctx.ref_name()));
-    });
-
-    log::mask("hunter2-not-a-real-secret");
-
-    Annotation::new()
+    let notice = Annotation::new()
         .file("examples/ci_selfcheck.rs")
-        .line(50)
-        .end_line(54)
+        .line(20)
+        .end_line(24)
         .col(5)
         .title("ci_selfcheck")
-        .notice("this annotation is emitted by the example and should appear on the run");
-
-    Annotation::new()
+        .command(AnnotationKind::Notice, "self-check running");
+    let warning = Annotation::new()
         .file("src/summary.rs")
         .line(1)
-        .title("demo warning")
-        .warning("non-fatal: proves ranged warning annotations render");
+        .title("range demo")
+        .command(AnnotationKind::Warning, "msg with % , \n and :,");
+    let commands = format!("{notice}\n{warning}");
 
-    if let Err(e) = output::set_output("answer", 42) {
-        log::error(format!("set_output failed: {e}"));
+    notice.issue();
+    warning.issue();
+
+    let mut exit = ExitCode::SUCCESS;
+    if let Err(e) = output::set_output("answer", "42\nwith newline") {
+        eprintln!("::error::set_output: {e}");
         return ExitCode::FAILURE;
     }
     if let Err(e) = output::export_var("DEMO_FLAG", true) {
-        log::error(format!("export_var failed: {e}"));
+        eprintln!("::error::export_var: {e}");
         return ExitCode::FAILURE;
     }
 
-    // --- 2. verify the round-trips ---
-    let results = [
-        (
-            "GITHUB_OUTPUT",
-            check("GITHUB_OUTPUT", &["answer<<", "\n42\n"]),
-        ),
-        (
-            "GITHUB_ENV",
-            check("GITHUB_ENV", &["DEMO_FLAG<<", "\ntrue\n"]),
-        ),
+    let gh_output = read_env_file("GITHUB_OUTPUT").unwrap_or_else(|| "<local: unset>".into());
+    let gh_env = read_env_file("GITHUB_ENV").unwrap_or_else(|| "<local: unset>".into());
+
+    let artifacts = [
+        ("workflow commands (stdout)", commands.as_str()),
+        ("GITHUB_OUTPUT", gh_output.as_str()),
+        ("GITHUB_ENV", gh_env.as_str()),
     ];
 
-    // --- 3. build a real job summary from the results ---
-    let mut summary = Summary::new();
-    summary
-        .heading("actions-rs CI self-check", 2)
-        .raw(
-            "Round-trip of the runner's environment-file protocol, ",
-            false,
-        )
-        .raw("verified from Rust with zero shell.", true);
-    let mut rows = vec![vec![Cell::header("check"), Cell::header("status")]];
-    for (name, r) in &results {
-        let status = match r {
-            Ok(true) => "✅ verified",
-            Ok(false) => "➖ skipped (local)",
-            Err(_) => "❌ FAILED",
-        };
-        rows.push(vec![Cell::new(*name), Cell::new(status)]);
+    // raw, verbatim, in the log
+    for (label, body) in artifacts {
+        println!("---8<--- {label} ---8<---");
+        println!("{body}");
+        println!("---8<--- /{label} ---8<---");
     }
-    summary
-        .table(rows)
-        .code_block("cargo run --example ci_selfcheck", Some("sh"))
-        .details(
-            "what this proves",
-            "set_output/export_var/Summary speak the runner protocol correctly.",
-        );
+
+    // same artifacts, formatted in the job summary
+    let mut summary = Summary::new();
+    summary.heading("actions-rs — emitted artifacts", 2);
+    for (label, body) in artifacts {
+        summary.heading(label, 3).code_block(body, None);
+    }
     if let Err(e) = summary.write() {
-        log::error(format!("summary.write failed: {e}"));
+        eprintln!("::error::summary.write: {e}");
         return ExitCode::FAILURE;
     }
-    let summary_ok = check(
-        "GITHUB_STEP_SUMMARY",
-        &["<h2>actions-rs CI self-check</h2>"],
-    );
 
-    // --- 4. report every check explicitly (never just "OK") ---
-    let mut failed = false;
-    let mut verified = 0u32;
-    let mut skipped = 0u32;
-    for (name, r) in results
-        .into_iter()
-        .chain([("GITHUB_STEP_SUMMARY", summary_ok)])
-    {
-        match r {
-            Ok(true) => {
-                verified += 1;
-                log::info(format!(
-                    "VERIFIED  {name}: our bytes are present in the runner file"
-                ));
-            }
-            Ok(false) => {
-                skipped += 1;
-                log::info(format!("SKIPPED   {name}: variable not set (local run)"));
-            }
-            Err(msg) => {
-                failed = true;
-                log::error(format!("FAILED    {name}: {msg}"));
+    if let Some(s) = read_env_file("GITHUB_STEP_SUMMARY") {
+        println!("---8<--- GITHUB_STEP_SUMMARY ---8<---");
+        println!("{s}");
+        println!("---8<--- /GITHUB_STEP_SUMMARY ---8<---");
+        for (var, needle) in [("GITHUB_OUTPUT", "answer<<"), ("GITHUB_ENV", "DEMO_FLAG<<")] {
+            if !read_env_file(var).is_some_and(|c| c.contains(needle)) {
+                eprintln!("::error::{var} missing {needle:?}");
+                exit = ExitCode::FAILURE;
             }
         }
+        if !s.contains("<h2>actions-rs — emitted artifacts</h2>") {
+            eprintln!("::error::GITHUB_STEP_SUMMARY missing heading");
+            exit = ExitCode::FAILURE;
+        }
     }
-
-    log::info(format!(
-        "summary: {verified} verified, {skipped} skipped, {} failed",
-        u32::from(failed)
-    ));
-
-    if failed {
-        ExitCode::FAILURE
-    } else if verified == 0 {
-        log::warning("local run: nothing verified (GITHUB_* unset) — ran demo only");
-        ExitCode::SUCCESS
-    } else {
-        log::info("all runner round-trips verified");
-        ExitCode::SUCCESS
-    }
+    exit
 }
