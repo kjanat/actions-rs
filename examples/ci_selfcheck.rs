@@ -64,8 +64,8 @@ fn main() -> ExitCode {
     for (label, body) in artifacts {
         summary.heading(label, 3).code_block(body, None);
     }
-    if let Err(e) = summary.write() {
-        eprintln!("::error::summary.write: {e}");
+    if let Err(e) = summary.write_overwrite() {
+        eprintln!("::error::summary.write_overwrite: {e}");
         return ExitCode::FAILURE;
     }
 
