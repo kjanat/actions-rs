@@ -57,12 +57,12 @@ jobs:
         run: |
           set -euo pipefail
           echo "steps.demo.outputs.answer = '${ANSWER}'"
-          [ "${ANSWER}" = "42" ] || { echo "::error::GITHUB_OUTPUT round-trip failed (expected 42)"; exit 1; }
+          [[ "${ANSWER}" == "42" ]] || { echo "::error::GITHUB_OUTPUT round-trip failed (expected 42)"; exit 1; }
           echo "DEMO_FLAG (from \$GITHUB_ENV) = '${DEMO_FLAG:-<unset>}'"
-          [ "${DEMO_FLAG:-}" = "true" ] || { echo "::error::GITHUB_ENV round-trip failed (expected true)"; exit 1; }
+          [[ "${DEMO_FLAG:-}" == "true" ]] || { echo "::error::GITHUB_ENV round-trip failed (expected true)"; exit 1; }
           bytes=$(wc -c < "${GITHUB_STEP_SUMMARY}")
           echo "job summary bytes = ${bytes}"
-          [ "${bytes}" -gt 0 ] || { echo "::error::job summary was not written"; exit 1; }
+          (( bytes > 0 )) || { echo "::error::job summary was not written"; exit 1; }
           echo "all round-trips OK"
 
       - name: assert round-trip (pwsh)
