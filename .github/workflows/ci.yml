@@ -9,37 +9,36 @@ permissions:
   contents: read
 
 jobs:
-  test:
-    name: test (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-      - run: cargo test --all-targets --all-features
-      - run: cargo test --doc
-
-  lint:
-    name: lint
+  # Pure-std crate: one runner is enough for the static gates. OS-sensitive
+  # behaviour (env-file newlines, the RandomState delimiter) is covered by the
+  # unit/integration tests, which run here.
+  check:
+    name: check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
         with: { components: "clippy, rustfmt" }
       - run: cargo fmt --check
+      - run: cargo test --all-targets --all-features
+      - run: cargo test --doc
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo doc --no-deps
         env:
           RUSTDOCFLAGS: -D warnings
 
-  # The point of this job: prove the crate's output actually round-trips
-  # through the *real* GitHub runner, not just our temp-file tests.
-  demo-roundtrip:
-    name: demo round-trip (real runner)
-    runs-on: ubuntu-latest
+  # The real test: does our protocol output round-trip through the actual
+  # runner, and is it consumable from the shell families real users write
+  # `run:` steps in — bash (Linux default) and PowerShell (Windows default)?
+  roundtrip:
+    name: round-trip (${{ matrix.shell }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { shell: bash, os: ubuntu-latest }
+          - { shell: pwsh, os: windows-latest }
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
@@ -51,17 +50,32 @@ jobs:
         id: demo
         run: cargo run --quiet --example demo
 
-      # If these pass, set_output / export_var / the summary writer all
-      # spoke the runner's protocol correctly end-to-end.
-      - name: assert output + env round-tripped
+      - name: assert round-trip (bash)
+        if: matrix.shell == 'bash'
+        shell: bash
         run: |
           set -euo pipefail
-          got_out='${{ steps.demo.outputs.answer }}'
-          echo "steps.demo.outputs.answer = '${got_out}'"
-          [ "${got_out}" = "42" ] || { echo "::error::GITHUB_OUTPUT round-trip failed (expected 42)"; exit 1; }
+          out='${{ steps.demo.outputs.answer }}'
+          echo "steps.demo.outputs.answer = '${out}'"
+          [ "${out}" = "42" ] || { echo "::error::GITHUB_OUTPUT round-trip failed (expected 42)"; exit 1; }
           echo "DEMO_FLAG (from \$GITHUB_ENV) = '${DEMO_FLAG:-<unset>}'"
           [ "${DEMO_FLAG:-}" = "true" ] || { echo "::error::GITHUB_ENV round-trip failed (expected true)"; exit 1; }
           bytes=$(wc -c < "${GITHUB_STEP_SUMMARY}")
-          echo "job summary bytes written = ${bytes}"
+          echo "job summary bytes = ${bytes}"
           [ "${bytes}" -gt 0 ] || { echo "::error::job summary was not written"; exit 1; }
           echo "all round-trips OK"
+
+      - name: assert round-trip (pwsh)
+        if: matrix.shell == 'pwsh'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $out = '${{ steps.demo.outputs.answer }}'
+          Write-Host "steps.demo.outputs.answer = '$out'"
+          if ($out -ne '42') { Write-Host "::error::GITHUB_OUTPUT round-trip failed (expected 42)"; exit 1 }
+          Write-Host "DEMO_FLAG (from `$GITHUB_ENV) = '$($env:DEMO_FLAG)'"
+          if ($env:DEMO_FLAG -ne 'true') { Write-Host "::error::GITHUB_ENV round-trip failed (expected true)"; exit 1 }
+          $bytes = (Get-Item $env:GITHUB_STEP_SUMMARY).Length
+          Write-Host "job summary bytes = $bytes"
+          if ($bytes -le 0) { Write-Host "::error::job summary was not written"; exit 1 }
+          Write-Host "all round-trips OK"
