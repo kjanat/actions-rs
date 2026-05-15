@@ -3,23 +3,14 @@
 // For a full list of overridable settings, and general information on folder-specific settings,
 // see the documentation: https://zed.dev/docs/configuring-zed#settings-files
 {
-	"formatter": [
-		{
-			"language_server": {
-				"name": "dprint"
-			}
-		},
-		{
-			"external": {
-				"command": "dprint",
-				"arguments": [
-					"fmt",
-					"--stdin",
-					"{buffer_path}"
-				]
-			}
+	"formatter": [{
+		"language_server": { "name": "dprint" }
+	}, {
+		"external": {
+			"command": "dprint",
+			"arguments": ["fmt", "--stdin", "{buffer_path}"]
 		}
-	],
+	}],
 	"prettier": {
 		"allowed": false
 	},
@@ -27,9 +18,7 @@
 		"rust-analyzer": {
 			"initialization_options": {
 				"diagnostics": {
-					"experimental": {
-						"enable": true
-					}
+					"experimental": { "enable": true }
 				},
 				"check": {
 					"workspace": true,
@@ -45,10 +34,7 @@
 	},
 	"languages": {
 		"TOML": {
-			"language_servers": [
-				"tombi",
-				"..."
-			]
+			"language_servers": ["tombi", "..."]
 		}
 	}
 }
