@@ -28,17 +28,13 @@ jobs:
           RUSTDOCFLAGS: -D warnings
 
   # Does our protocol output round-trip through the *real* runner's
-  # environment files? The check is written in Rust (examples/ci_selfcheck.rs)
-  # so there is no shell, no `${{ }}` interpolation, and it is identical on
-  # every OS. Run on Linux + Windows because env-file path/newline handling is
-  # the only genuinely platform-sensitive surface.
+  # environment files? Written in Rust (examples/ci_selfcheck.rs): no shell,
+  # no `${{ }}`. Ubuntu only — the crate has no platform-specific code
+  # (env-file writes hardcode `\n`, no path/OS branching), so Windows would
+  # cost 2x minutes for zero extra signal.
   roundtrip:
-    name: round-trip (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
+    name: round-trip
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable

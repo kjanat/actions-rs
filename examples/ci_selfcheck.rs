@@ -17,16 +17,24 @@ fn read_env_file(var: &str) -> Option<String> {
 fn main() -> ExitCode {
     let notice = Annotation::new()
         .file("examples/ci_selfcheck.rs")
-        .line(20)
+        .line(18)
         .end_line(24)
         .col(5)
         .title("ci_selfcheck")
-        .command(AnnotationKind::Notice, "self-check running");
+        .command(
+            AnnotationKind::Notice,
+            "actions-rs self-check ran in this job",
+        );
     let warning = Annotation::new()
         .file("src/summary.rs")
-        .line(1)
-        .title("range demo")
-        .command(AnnotationKind::Warning, "msg with % , \n and :,");
+        .line(112)
+        .end_line(126)
+        .col(5)
+        .title("example warning")
+        .command(
+            AnnotationKind::Warning,
+            "this is a ranged warning annotation covering Summary::code_block",
+        );
     let commands = format!("{notice}\n{warning}");
 
     notice.issue();
