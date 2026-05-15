@@ -27,67 +27,19 @@ jobs:
         env:
           RUSTDOCFLAGS: -D warnings
 
-  # The real test: does our protocol output round-trip through the actual
-  # runner, and is it consumable from the shell families real users write
-  # `run:` steps in — bash (Linux default) and PowerShell (Windows default)?
+  # Does our protocol output round-trip through the *real* runner's
+  # environment files? The check is written in Rust (examples/ci_selfcheck.rs)
+  # so there is no shell, no `${{ }}` interpolation, and it is identical on
+  # every OS. Run on Linux + Windows because env-file path/newline handling is
+  # the only genuinely platform-sensitive surface.
   roundtrip:
-    name: round-trip (${{ matrix.shell }})
+    name: round-trip (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - { shell: bash, os: ubuntu-latest }
-          - { shell: pwsh, os: windows-latest }
+        os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
-
-      # Emits ::warning annotations (visible in the run UI), writes the job
-      # summary, sets a step output via $GITHUB_OUTPUT, exports an env var via
-      # $GITHUB_ENV. The summary MUST be checked in this same step:
-      # $GITHUB_STEP_SUMMARY is a per-step file, so a later step sees its own
-      # empty one. $GITHUB_OUTPUT / $GITHUB_ENV are designed to cross steps.
-      - name: run example + check summary (bash)
-        if: matrix.shell == 'bash'
-        id: demo
-        shell: bash
-        run: |
-          set -euo pipefail
-          cargo run --quiet --example demo
-          bytes=$(wc -c < "${GITHUB_STEP_SUMMARY}")
-          echo "Summary::write bytes -> \$GITHUB_STEP_SUMMARY = ${bytes}"
-          (( bytes > 0 )) || { echo "::error::Summary::write produced 0 bytes in the real runner"; exit 1; }
-
-      - name: run example + check summary (pwsh)
-        if: matrix.shell == 'pwsh'
-        id: demo_pwsh
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          cargo run --quiet --example demo
-          $bytes = (Get-Item $env:GITHUB_STEP_SUMMARY).Length
-          Write-Host "Summary::write bytes -> `$GITHUB_STEP_SUMMARY = $bytes"
-          if ($bytes -le 0) { Write-Host "::error::Summary::write produced 0 bytes in the real runner"; exit 1 }
-
-      - name: assert output + env round-trip (bash)
-        if: matrix.shell == 'bash'
-        shell: bash
-        env: { ANSWER: "${{ steps.demo.outputs.answer }}" }
-        run: |
-          set -euo pipefail
-          echo "answer='${ANSWER}'  DEMO_FLAG='${DEMO_FLAG:-<unset>}'"
-          [[ "${ANSWER}" == "42" ]] || { echo "::error::GITHUB_OUTPUT round-trip failed (expected 42)"; exit 1; }
-          [[ "${DEMO_FLAG:-}" == "true" ]] || { echo "::error::GITHUB_ENV round-trip failed (expected true)"; exit 1; }
-          echo "round-trips OK"
-
-      - name: assert output + env round-trip (pwsh)
-        if: matrix.shell == 'pwsh'
-        shell: pwsh
-        env: { ANSWER: "${{ steps.demo_pwsh.outputs.answer }}" }
-        run: |
-          $ErrorActionPreference = 'Stop'
-          Write-Host "answer='$($env:ANSWER)'  DEMO_FLAG='$($env:DEMO_FLAG)'"
-          if ($env:ANSWER -ne '42') { Write-Host "::error::GITHUB_OUTPUT round-trip failed (expected 42)"; exit 1 }
-          if ($env:DEMO_FLAG -ne 'true') { Write-Host "::error::GITHUB_ENV round-trip failed (expected true)"; exit 1 }
-          Write-Host "round-trips OK"
+      - run: cargo run --quiet --example ci_selfcheck
