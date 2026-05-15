@@ -15,6 +15,19 @@ use crate::error::{Error, Result};
 /// GitHub's documented per-step summary size limit (1 MiB).
 const MAX_BYTES: usize = 1024 * 1024;
 
+/// Escape text destined for HTML element content. Without this, content like
+/// `DEMO_FLAG<<delim` is parsed by the browser as a bogus tag and truncated.
+fn esc_text(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+}
+
+/// Escape text destined for a double-quoted HTML attribute value.
+fn esc_attr(s: &str) -> String {
+    esc_text(s).replace('"', "&quot;")
+}
+
 /// A table cell. Use [`Cell::header`] for `<th>`; `colspan`/`rowspan` map to
 /// the matching HTML attributes.
 #[derive(Debug, Clone)]
@@ -104,22 +117,23 @@ impl Summary {
     /// Append an `<h1>`–`<h6>` heading (`level` clamped to 1..=6).
     pub fn heading(&mut self, text: impl AsRef<str>, level: u8) -> &mut Self {
         let l = level.clamp(1, 6);
-        let _ = writeln!(self.buf, "<h{l}>{}</h{l}>", text.as_ref());
+        let _ = writeln!(self.buf, "<h{l}>{}</h{l}>", esc_text(text.as_ref()));
         self
     }
 
     /// Append a fenced `<pre><code>` block with an optional language hint.
     pub fn code_block(&mut self, code: impl AsRef<str>, lang: Option<&str>) -> &mut Self {
+        let code = esc_text(code.as_ref());
         match lang {
             Some(l) => {
                 let _ = writeln!(
                     self.buf,
-                    "<pre lang=\"{l}\"><code>{}</code></pre>",
-                    code.as_ref()
+                    "<pre lang=\"{}\"><code>{code}</code></pre>",
+                    esc_attr(l)
                 );
             }
             None => {
-                let _ = writeln!(self.buf, "<pre><code>{}</code></pre>", code.as_ref());
+                let _ = writeln!(self.buf, "<pre><code>{code}</code></pre>");
             }
         }
         self
@@ -136,7 +150,7 @@ impl Summary {
         self.buf.push_str(tag);
         self.buf.push('>');
         for item in items {
-            let _ = write!(self.buf, "<li>{}</li>", item.as_ref());
+            let _ = write!(self.buf, "<li>{}</li>", esc_text(item.as_ref()));
         }
         let _ = writeln!(self.buf, "</{tag}>");
         self
@@ -152,7 +166,9 @@ impl Summary {
                 let _ = write!(
                     self.buf,
                     "<{tag} colspan=\"{}\" rowspan=\"{}\">{}</{tag}>",
-                    cell.colspan, cell.rowspan, cell.data
+                    cell.colspan,
+                    cell.rowspan,
+                    esc_text(&cell.data)
                 );
             }
             self.buf.push_str("</tr>");
@@ -166,8 +182,8 @@ impl Summary {
         let _ = writeln!(
             self.buf,
             "<details><summary>{}</summary>{}</details>",
-            label.as_ref(),
-            content.as_ref()
+            esc_text(label.as_ref()),
+            esc_text(content.as_ref())
         );
         self
     }
@@ -180,9 +196,9 @@ impl Summary {
         size: Option<(u32, u32)>,
     ) -> &mut Self {
         self.buf.push_str("<img src=\"");
-        self.buf.push_str(src.as_ref());
+        self.buf.push_str(&esc_attr(src.as_ref()));
         self.buf.push_str("\" alt=\"");
-        self.buf.push_str(alt.as_ref());
+        self.buf.push_str(&esc_attr(alt.as_ref()));
         self.buf.push('"');
         if let Some((w, h)) = size {
             let _ = write!(self.buf, " width=\"{w}\" height=\"{h}\"");
@@ -196,8 +212,8 @@ impl Summary {
         let _ = writeln!(
             self.buf,
             "<a href=\"{}\">{}</a>",
-            href.as_ref(),
-            text.as_ref()
+            esc_attr(href.as_ref()),
+            esc_text(text.as_ref())
         );
         self
     }
@@ -208,12 +224,17 @@ impl Summary {
             Some(c) => {
                 let _ = writeln!(
                     self.buf,
-                    "<blockquote cite=\"{c}\">{}</blockquote>",
-                    text.as_ref()
+                    "<blockquote cite=\"{}\">{}</blockquote>",
+                    esc_attr(c),
+                    esc_text(text.as_ref())
                 );
             }
             None => {
-                let _ = writeln!(self.buf, "<blockquote>{}</blockquote>", text.as_ref());
+                let _ = writeln!(
+                    self.buf,
+                    "<blockquote>{}</blockquote>",
+                    esc_text(text.as_ref())
+                );
             }
         }
         self
@@ -296,6 +317,34 @@ mod tests {
         let mut s = Summary::new();
         s.heading("Top", 9);
         assert_eq!(s.stringify(), "<h6>Top</h6>\n");
+    }
+
+    #[test]
+    fn html_metachars_are_escaped() {
+        let mut s = Summary::new();
+        // The exact bug: `DEMO_FLAG<<delim` was eaten by the HTML parser.
+        s.code_block("DEMO_FLAG<<d & a>b", None);
+        assert_eq!(
+            s.stringify(),
+            "<pre><code>DEMO_FLAG&lt;&lt;d &amp; a&gt;b</code></pre>\n"
+        );
+
+        let mut h = Summary::new();
+        h.heading("a < b & c", 2);
+        assert_eq!(h.stringify(), "<h2>a &lt; b &amp; c</h2>\n");
+
+        // Attribute values also escape the double quote.
+        let mut l = Summary::new();
+        l.link("x", "https://e.com/?a=1\"&b=2");
+        assert_eq!(
+            l.stringify(),
+            "<a href=\"https://e.com/?a=1&quot;&amp;b=2\">x</a>\n"
+        );
+
+        // raw() stays raw by contract.
+        let mut r = Summary::new();
+        r.raw("<b>kept</b>", false);
+        assert_eq!(r.stringify(), "<b>kept</b>");
     }
 
     #[test]
