@@ -53,11 +53,11 @@ jobs:
       - name: assert round-trip (bash)
         if: matrix.shell == 'bash'
         shell: bash
+        env: { ANSWER: "${{ steps.demo.outputs.answer }}" }
         run: |
           set -euo pipefail
-          out='${{ steps.demo.outputs.answer }}'
-          echo "steps.demo.outputs.answer = '${out}'"
-          [ "${out}" = "42" ] || { echo "::error::GITHUB_OUTPUT round-trip failed (expected 42)"; exit 1; }
+          echo "steps.demo.outputs.answer = '${ANSWER}'"
+          [ "${ANSWER}" = "42" ] || { echo "::error::GITHUB_OUTPUT round-trip failed (expected 42)"; exit 1; }
           echo "DEMO_FLAG (from \$GITHUB_ENV) = '${DEMO_FLAG:-<unset>}'"
           [ "${DEMO_FLAG:-}" = "true" ] || { echo "::error::GITHUB_ENV round-trip failed (expected true)"; exit 1; }
           bytes=$(wc -c < "${GITHUB_STEP_SUMMARY}")
@@ -68,11 +68,11 @@ jobs:
       - name: assert round-trip (pwsh)
         if: matrix.shell == 'pwsh'
         shell: pwsh
+        env: { ANSWER: "${{ steps.demo.outputs.answer }}" }
         run: |
           $ErrorActionPreference = 'Stop'
-          $out = '${{ steps.demo.outputs.answer }}'
-          Write-Host "steps.demo.outputs.answer = '$out'"
-          if ($out -ne '42') { Write-Host "::error::GITHUB_OUTPUT round-trip failed (expected 42)"; exit 1 }
+          Write-Host "steps.demo.outputs.answer = '$($env:ANSWER)'"
+          if ($env:ANSWER -ne '42') { Write-Host "::error::GITHUB_OUTPUT round-trip failed (expected 42)"; exit 1 }
           Write-Host "DEMO_FLAG (from `$GITHUB_ENV) = '$($env:DEMO_FLAG)'"
           if ($env:DEMO_FLAG -ne 'true') { Write-Host "::error::GITHUB_ENV round-trip failed (expected true)"; exit 1 }
           $bytes = (Get-Item $env:GITHUB_STEP_SUMMARY).Length
