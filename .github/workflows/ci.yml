@@ -34,11 +34,6 @@ jobs:
         env:
           RUSTDOCFLAGS: -D warnings
 
-  # Does our protocol output round-trip through the *real* runner's
-  # environment files? Written in Rust (examples/ci_selfcheck.rs): no shell,
-  # no `${{ }}`. Ubuntu only — the crate has no platform-specific code
-  # (env-file writes hardcode `\n`, no path/OS branching), so Windows would
-  # cost 2x minutes for zero extra signal.
   roundtrip:
     name: round-trip
     runs-on: ubuntu-latest
@@ -46,3 +41,6 @@ jobs:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo run --quiet --example ci_selfcheck
+        shell: bash
+      - run: cargo run --quiet --example ci_selfcheck
+        shell: pwsh
