@@ -44,38 +44,50 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
 
       # Emits ::warning annotations (visible in the run UI), writes the job
-      # summary, sets a step output via $GITHUB_OUTPUT, exports an env var
-      # via $GITHUB_ENV.
-      - name: run example
+      # summary, sets a step output via $GITHUB_OUTPUT, exports an env var via
+      # $GITHUB_ENV. The summary MUST be checked in this same step:
+      # $GITHUB_STEP_SUMMARY is a per-step file, so a later step sees its own
+      # empty one. $GITHUB_OUTPUT / $GITHUB_ENV are designed to cross steps.
+      - name: run example + check summary (bash)
+        if: matrix.shell == 'bash'
         id: demo
-        run: cargo run --quiet --example demo
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo run --quiet --example demo
+          bytes=$(wc -c < "${GITHUB_STEP_SUMMARY}")
+          echo "Summary::write bytes -> \$GITHUB_STEP_SUMMARY = ${bytes}"
+          (( bytes > 0 )) || { echo "::error::Summary::write produced 0 bytes in the real runner"; exit 1; }
 
-      - name: assert round-trip (bash)
+      - name: run example + check summary (pwsh)
+        if: matrix.shell == 'pwsh'
+        id: demo_pwsh
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          cargo run --quiet --example demo
+          $bytes = (Get-Item $env:GITHUB_STEP_SUMMARY).Length
+          Write-Host "Summary::write bytes -> `$GITHUB_STEP_SUMMARY = $bytes"
+          if ($bytes -le 0) { Write-Host "::error::Summary::write produced 0 bytes in the real runner"; exit 1 }
+
+      - name: assert output + env round-trip (bash)
         if: matrix.shell == 'bash'
         shell: bash
         env: { ANSWER: "${{ steps.demo.outputs.answer }}" }
         run: |
           set -euo pipefail
-          echo "steps.demo.outputs.answer = '${ANSWER}'"
+          echo "answer='${ANSWER}'  DEMO_FLAG='${DEMO_FLAG:-<unset>}'"
           [[ "${ANSWER}" == "42" ]] || { echo "::error::GITHUB_OUTPUT round-trip failed (expected 42)"; exit 1; }
-          echo "DEMO_FLAG (from \$GITHUB_ENV) = '${DEMO_FLAG:-<unset>}'"
           [[ "${DEMO_FLAG:-}" == "true" ]] || { echo "::error::GITHUB_ENV round-trip failed (expected true)"; exit 1; }
-          bytes=$(wc -c < "${GITHUB_STEP_SUMMARY}")
-          echo "job summary bytes = ${bytes}"
-          (( bytes > 0 )) || { echo "::error::job summary was not written"; exit 1; }
-          echo "all round-trips OK"
+          echo "round-trips OK"
 
-      - name: assert round-trip (pwsh)
+      - name: assert output + env round-trip (pwsh)
         if: matrix.shell == 'pwsh'
         shell: pwsh
-        env: { ANSWER: "${{ steps.demo.outputs.answer }}" }
+        env: { ANSWER: "${{ steps.demo_pwsh.outputs.answer }}" }
         run: |
           $ErrorActionPreference = 'Stop'
-          Write-Host "steps.demo.outputs.answer = '$($env:ANSWER)'"
+          Write-Host "answer='$($env:ANSWER)'  DEMO_FLAG='$($env:DEMO_FLAG)'"
           if ($env:ANSWER -ne '42') { Write-Host "::error::GITHUB_OUTPUT round-trip failed (expected 42)"; exit 1 }
-          Write-Host "DEMO_FLAG (from `$GITHUB_ENV) = '$($env:DEMO_FLAG)'"
           if ($env:DEMO_FLAG -ne 'true') { Write-Host "::error::GITHUB_ENV round-trip failed (expected true)"; exit 1 }
-          $bytes = (Get-Item $env:GITHUB_STEP_SUMMARY).Length
-          Write-Host "job summary bytes = $bytes"
-          if ($bytes -le 0) { Write-Host "::error::job summary was not written"; exit 1 }
-          Write-Host "all round-trips OK"
+          Write-Host "round-trips OK"
