@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --all-targets --all-features
+      - run: cargo test --doc
+
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with: { components: "clippy, rustfmt" }
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo doc --no-deps
+        env:
+          RUSTDOCFLAGS: -D warnings
+
+  # The point of this job: prove the crate's output actually round-trips
+  # through the *real* GitHub runner, not just our temp-file tests.
+  demo-roundtrip:
+    name: demo round-trip (real runner)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+
+      # Emits ::warning annotations (visible in the run UI), writes the job
+      # summary, sets a step output via $GITHUB_OUTPUT, exports an env var
+      # via $GITHUB_ENV.
+      - name: run example
+        id: demo
+        run: cargo run --quiet --example demo
+
+      # If these pass, set_output / export_var / the summary writer all
+      # spoke the runner's protocol correctly end-to-end.
+      - name: assert output + env round-tripped
+        run: |
+          set -euo pipefail
+          got_out='${{ steps.demo.outputs.answer }}'
+          echo "steps.demo.outputs.answer = '${got_out}'"
+          [ "${got_out}" = "42" ] || { echo "::error::GITHUB_OUTPUT round-trip failed (expected 42)"; exit 1; }
+          echo "DEMO_FLAG (from \$GITHUB_ENV) = '${DEMO_FLAG:-<unset>}'"
+          [ "${DEMO_FLAG:-}" = "true" ] || { echo "::error::GITHUB_ENV round-trip failed (expected true)"; exit 1; }
+          bytes=$(wc -c < "${GITHUB_STEP_SUMMARY}")
+          echo "job summary bytes written = ${bytes}"
+          [ "${bytes}" -gt 0 ] || { echo "::error::job summary was not written"; exit 1; }
+          echo "all round-trips OK"
