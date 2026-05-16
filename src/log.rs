@@ -155,6 +155,16 @@ pub fn group_guard(name: impl Into<String>) -> GroupGuard {
 
 /// Run `f` inside a collapsible group, closing the group afterwards even if
 /// `f` panics. Returns whatever `f` returns.
+///
+/// # Examples
+///
+/// ```no_run
+/// let built = actions_rs::log::group("build", || {
+///     actions_rs::log::info("compiling...");
+///     6 * 7
+/// });
+/// assert_eq!(built, 42);
+/// ```
 pub fn group<R>(name: impl Into<String>, f: impl FnOnce() -> R) -> R {
     let _guard = group_guard(name);
     f()

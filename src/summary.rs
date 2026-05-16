@@ -145,7 +145,29 @@ impl From<SummaryText> for Cell {
     }
 }
 
-/// Accumulating job-summary builder. Chain `add_*` calls, then `write`.
+/// Accumulating job-summary builder. Chain the builder methods, then
+/// [`write`](Summary::write) (append) or
+/// [`write_overwrite`](Summary::write_overwrite). Building is pure and
+/// inspectable via [`stringify`](Summary::stringify); only the `write*`
+/// methods touch `GITHUB_STEP_SUMMARY`.
+///
+/// # Examples
+///
+/// ```
+/// use actions_rs::Summary;
+///
+/// let mut s = Summary::new();
+/// s.heading("Build", 2)
+///     .code_block("cargo test", Some("sh"));
+///
+/// assert_eq!(
+///     s.stringify(),
+///     "<h2>Build</h2>\n<pre lang=\"sh\"><code>cargo test</code></pre>\n"
+/// );
+///
+/// // In a real action you would then persist it:
+/// // s.write()?;  // appends to $GITHUB_STEP_SUMMARY
+/// ```
 #[derive(Debug, Clone, Default)]
 pub struct Summary {
     buf: String,

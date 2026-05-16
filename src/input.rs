@@ -65,6 +65,16 @@ pub fn input_with(name: &str, options: InputOptions) -> Result<String> {
 }
 
 /// Read an optional input, trimmed. Returns `""` when unset.
+///
+/// An action input `foo-bar` arrives as the env var `INPUT_FOO-BAR`
+/// (uppercased, spaces → `_`, hyphens kept).
+///
+/// # Examples
+///
+/// ```
+/// // No `INPUT_NOPE` is set, so this is the empty string, not an error.
+/// assert_eq!(actions_rs::input::input("nope"), "");
+/// ```
 #[must_use]
 pub fn input(name: &str) -> String {
     // Infallible: required is false, so `input_with` cannot error here.
@@ -103,6 +113,16 @@ fn parse_bool(name: &str, value: &str) -> Result<bool> {
 /// # Errors
 /// [`Error::InvalidBool`] for any other value, including absent/empty
 /// (matching `@actions/core`'s `getBooleanInput`).
+///
+/// # Examples
+///
+/// ```no_run
+/// // `with: { verbose: true }` -> INPUT_VERBOSE=true
+/// let verbose = actions_rs::input::bool_input("verbose").unwrap_or(false);
+/// if verbose {
+///     actions_rs::log::info("verbose mode");
+/// }
+/// ```
 pub fn bool_input(name: &str) -> Result<bool> {
     let value = input_with(
         name,
@@ -155,6 +175,14 @@ fn split_multiline(value: &str, trim: bool) -> Vec<String> {
 /// # Errors
 /// [`Error::ParseInput`] if parsing fails (the type's `FromStr::Err` is
 /// rendered via [`Display`]).
+///
+/// # Examples
+///
+/// ```no_run
+/// // INPUT_RETRIES=3
+/// let retries: u32 = actions_rs::input::input_as("retries")?;
+/// # Ok::<(), actions_rs::Error>(())
+/// ```
 pub fn input_as<T>(name: &str) -> Result<T>
 where
     T: FromStr,

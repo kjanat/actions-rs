@@ -114,8 +114,17 @@ pub fn apply_overlay(command: &mut Command) -> &mut Command {
 
 /// Set a step output (`GITHUB_OUTPUT`, falling back to `::set-output::`).
 ///
+/// Readable by later steps as `${{ steps.<id>.outputs.<name> }}`.
+///
 /// # Errors
 /// [`crate::Error`] on a file-command write failure or delimiter collision.
+///
+/// # Examples
+///
+/// ```no_run
+/// actions_rs::output::set_output("answer", 42)?;
+/// # Ok::<(), actions_rs::Error>(())
+/// ```
 pub fn set_output(name: &str, value: impl Display) -> Result<()> {
     let value = value.to_string();
     let msg = key_value_message(name, &value)?;
@@ -170,6 +179,13 @@ pub fn get_state(name: &str) -> Option<String> {
 /// [`crate::Error::ReservedName`] for `GITHUB_*` / `RUNNER_*` / `NODE_OPTIONS`;
 /// [`crate::Error::UnavailableFileCommand`] when `GITHUB_ENV` is unset;
 /// otherwise on a file-command write failure or delimiter collision.
+///
+/// # Examples
+///
+/// ```no_run
+/// actions_rs::output::export_var("BUILD_PROFILE", "release")?;
+/// # Ok::<(), actions_rs::Error>(())
+/// ```
 pub fn export_var(name: &str, value: impl Display) -> Result<()> {
     if is_reserved(name) {
         return Err(crate::Error::ReservedName(name.to_owned()));

@@ -148,6 +148,17 @@ impl RunnerArch {
 /// environment. Per the design decision, the webhook payload is exposed only
 /// as the *path* ([`Context::event_path`]) — parsing the JSON would require a
 /// serde dependency and is out of scope.
+///
+/// # Examples
+///
+/// ```
+/// let ctx = actions_rs::Context::new();
+/// // Each accessor is `Option`: `None` outside Actions, `Some` on a runner.
+/// match ctx.repository() {
+///     Some(repo) => println!("running for {repo}"),
+///     None => println!("not in GitHub Actions"),
+/// }
+/// ```
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Context;
 
