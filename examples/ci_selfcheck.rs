@@ -46,17 +46,17 @@ fn main() -> ExitCode {
         eprintln!("::error::set_output: {e}");
         return ExitCode::FAILURE;
     }
-    if let Err(e) = output::export_var("DEMO_FLAG", true) {
-        if !matches!(
+    if let Err(e) = output::export_var("DEMO_FLAG", true)
+        && !matches!(
             e,
             actions_rs::Error::UnavailableFileCommand {
                 var: "GITHUB_ENV",
                 ..
             }
-        ) {
-            eprintln!("::error::export_var: {e}");
-            return ExitCode::FAILURE;
-        }
+        )
+    {
+        eprintln!("::error::export_var: {e}");
+        return ExitCode::FAILURE;
     }
 
     let gh_output = read_env_file("GITHUB_OUTPUT").unwrap_or_else(|| "<local: unset>".into());
