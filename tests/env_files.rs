@@ -119,10 +119,21 @@ fn missing_env_file_var_is_a_clean_fallback_not_an_error() {
     let _guard = ENV_LOCK
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let prev = std::env::var_os("GITHUB_OUTPUT");
     // SAFETY: serialised by ENV_LOCK.
     unsafe { std::env::remove_var("GITHUB_OUTPUT") };
-    let _stop = actions_rs::log::stop_commands();
-    actions_rs::output::set_output("k", "v").expect("fallback must succeed");
+    let result = {
+        let _stop = actions_rs::log::stop_commands();
+        actions_rs::output::set_output("k", "v")
+    };
+    // SAFETY: serialised by ENV_LOCK. Restore before asserting.
+    unsafe {
+        match prev {
+            Some(v) => std::env::set_var("GITHUB_OUTPUT", v),
+            None => std::env::remove_var("GITHUB_OUTPUT"),
+        }
+    }
+    result.expect("fallback must succeed");
 }
 
 #[test]
@@ -130,13 +141,18 @@ fn get_state_reads_state_prefixed_var() {
     let _guard = ENV_LOCK
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let prev = std::env::var_os("STATE_cache_hit");
     // SAFETY: serialised by ENV_LOCK.
     unsafe { std::env::set_var("STATE_cache_hit", "true") };
-    assert_eq!(
-        actions_rs::output::get_state("cache_hit"),
-        Some("true".to_owned())
-    );
-    unsafe { std::env::remove_var("STATE_cache_hit") };
+    let got = actions_rs::output::get_state("cache_hit");
+    // SAFETY: serialised by ENV_LOCK. Restore prior value, don't just remove.
+    unsafe {
+        match prev {
+            Some(v) => std::env::set_var("STATE_cache_hit", v),
+            None => std::env::remove_var("STATE_cache_hit"),
+        }
+    }
+    assert_eq!(got, Some("true".to_owned()));
 }
 
 #[test]
