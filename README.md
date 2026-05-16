@@ -70,7 +70,8 @@ sees; they change what the *calling process* can rely on:
 
 1. **No `std::env` mutation.** `@actions/core`'s `exportVariable` / `addPath`
    also write `process.env` so the *current* process sees the change. That
-   write is `unsafe` in Rust edition 2024 and this crate is
+   write is [`unsafe` in Rust edition 2024][rust-2024-set-var] (it is unsound
+   when another thread may be running) and this crate is
    `#![forbid(unsafe_code)]`, so `export_var` / `add_path` only write the env
    file. For same-process visibility use the safe overlay: `overlay_var`,
    `overlay_path`, or `apply_overlay(&mut Command)` for child processes.
@@ -117,47 +118,81 @@ derive-driven input structs — use [`ghactions`].\
 If you just want zero-dep logging/env helpers and don't need the annotation
 builder, [`gha`] is mature and fine.
 
-Explicitly **out of scope**: REST/GraphQL client, OIDC, `action.yml`
-derive/codegen, tool cache, glob, command exec.
+**Not provided here:** REST/GraphQL client, OIDC, `action.yml`
+derive/codegen, tool cache, glob, command exec. These are deliberately a
+different crate's job — pair this with one that covers them.
 
 ## Quick start
 
+The asserts below are real: this block is compiled **and run** as a doctest
+(see `tests/` and the `cfg(doctest)` README harness), so the documented
+behaviour is verified on every `cargo test`.
+
 ```rust
-use actions_rs::{Annotation, Cell, Summary, SummaryText, log, output};
+use actions_rs::{Annotation, AnnotationSpan, Cell, Summary, SummaryText, log, output};
 
 fn main() -> actions_rs::Result<()> {
-    // Typed, validated input (env var `INPUT_VERBOSE`).
+    // Typed, validated input. `INPUT_VERBOSE` is unset here, so the default
+    // is used. (`bool_input` is strict YAML 1.2: only true/True/TRUE/...)
     let verbose = actions_rs::input::bool_input("verbose").unwrap_or(false);
+    assert!(!verbose);
 
-    // Annotation with a source span -> rendered as a workflow command.
+    // Register a secret; the runner redacts it from all later log output.
+    log::set_secret("hunter2");
+
+    // Annotation with a precise source span -> one workflow command on stdout:
+    // ::warning title=lint,file=src/main.rs,line=42,col=5,endColumn=9::unused import
     Annotation::new()
         .file("src/main.rs")
-        .line(42)
+        .span(AnnotationSpan::Column {
+            line: 42,
+            start: 5,
+            end: Some(9),
+        })
         .title("lint")
         .warning("unused import");
 
-    // `format!`-style macros, exported at the crate root.
+    // `format!`-style macro, exported at the crate root.
     actions_rs::warning!("verbose = {verbose}");
 
-    // Group that closes even on panic; returns the closure's value.
-    let n = actions_rs::group!("build", { 6 * 7 });
+    // Panic-safe group: emits ::group::/::endgroup:: even if the body
+    // panics, and forwards the body's value.
+    let answer = actions_rs::group!("build", { 6 * 7 });
+    assert_eq!(answer, 42);
 
-    // Runner-only side effects: env files / step outputs only exist on a runner,
-    // and `export_var` has no stdout fallback (it errors off-runner by design),
-    // so gate them behind the runtime check.
+    // Build a job summary. Text is HTML-escaped by default; raw HTML is an
+    // explicit opt-in via `SummaryText::html`. `stringify` renders it in
+    // memory (no runner needed), so the structure is verifiable right here.
+    let mut summary = Summary::new();
+    summary
+        .heading("Result", 2)
+        .details(
+            "note: <b> stays literal",
+            SummaryText::html("<strong>raw opt-in</strong>"),
+        )
+        .table([vec![Cell::header("answer"), Cell::new(answer.to_string())]]);
+    let rendered = summary.stringify();
+    assert!(rendered.contains("<h2>Result</h2>"));
+    assert!(rendered.contains("note: &lt;b&gt; stays literal")); // escaped by default
+    assert!(rendered.contains("<strong>raw opt-in</strong>")); // explicit html(): not escaped
+    assert!(rendered.contains(r#"<td colspan="1" rowspan="1">42</td>"#));
+
+    // Runner-only side effects. `GITHUB_OUTPUT`/`GITHUB_ENV` only exist on a
+    // runner, and `export_var`/`add_path` have NO stdout fallback (GitHub
+    // disabled `::set-env::`/`::add-path::`), so they error off-runner by
+    // design -- gate them behind the runtime check.
     if actions_rs::env::is_github_actions() {
         log::info("running inside GitHub Actions");
-        output::set_output("answer", n)?;
-        output::export_var("BUILD_OK", true)?;
+        output::set_output("answer", answer)?;
 
-        let mut s = Summary::new();
-        s.heading("Result", 2)
-            .details(
-                "rendering",
-                SummaryText::html("<strong>raw HTML opt-in</strong>"),
-            )
-            .table([vec![Cell::header("answer"), Cell::new(n.to_string())]]);
-        s.write()?;
+        // `export_var` writes GITHUB_ENV for *later* steps. It does not (and
+        // cannot safely) mutate this process's env -- `std::env::set_var` is
+        // `unsafe` in edition 2024. To observe it same-process, read the safe
+        // overlay instead of `std::env::var`.
+        output::export_var("BUILD_OK", true)?;
+        assert_eq!(output::overlay_var("BUILD_OK").as_deref(), Some("true"));
+
+        summary.write()?;
     }
     Ok(())
 }
@@ -185,6 +220,7 @@ See [`examples/demo.rs`] for a runnable tour.
   this is an independent crate of the same (previously unregistered) name.
 
 [CVE-2020-15228]: https://nvd.nist.gov/vuln/detail/cve-2020-15228
+[rust-2024-set-var]: https://doc.rust-lang.org/edition-guide/rust-2024/newly-unsafe-functions.html#stdenvset_var-remove_var
 [gha-setenv]: https://github.blog/changelog/2020-10-01-github-actions-deprecating-set-env-and-add-path-commands/
 [actions-core-cratesio]: https://crates.io/crates/actions-core/versions
 [`@actions/core`]: https://github.com/actions/toolkit/tree/main/packages/core

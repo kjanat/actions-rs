@@ -141,24 +141,56 @@ fn var(name: &str) -> Option<String> {
 }
 
 /// Whether the code is running inside GitHub Actions (`GITHUB_ACTIONS=="true"`).
+///
+/// # Examples
+///
+/// ```
+/// if actions_rs::env::is_github_actions() {
+///     actions_rs::log::info("on a runner");
+/// } // else: running locally — no-op
+/// ```
 #[must_use]
 pub fn is_github_actions() -> bool {
     std::env::var(vars::GITHUB_ACTIONS).as_deref() == Ok("true")
 }
 
 /// Whether running in a CI environment (`CI=="true"`).
+///
+/// # Examples
+///
+/// ```
+/// // Broader than `is_github_actions` (also true on Travis, GitLab, …).
+/// let interactive = !actions_rs::env::is_ci();
+/// let _ = interactive;
+/// ```
 #[must_use]
 pub fn is_ci() -> bool {
     std::env::var(vars::CI).as_deref() == Ok("true")
 }
 
 /// Whether step-debug logging is enabled (`RUNNER_DEBUG=="1"`).
+///
+/// # Examples
+///
+/// ```
+/// if actions_rs::env::is_debug() {
+///     actions_rs::log::debug("extra diagnostics");
+/// }
+/// ```
 #[must_use]
 pub fn is_debug() -> bool {
     std::env::var(vars::RUNNER_DEBUG).as_deref() == Ok("1")
 }
 
 /// The runner operating system, parsed from `RUNNER_OS`.
+///
+/// # Examples
+///
+/// ```
+/// use actions_rs::RunnerOs;
+/// // Unrecognised values are preserved rather than lost.
+/// assert_eq!(RunnerOs::Other("Plan9".into()), RunnerOs::Other("Plan9".into()));
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RunnerOs {
     /// `RUNNER_OS == "Linux"`.
@@ -173,6 +205,17 @@ pub enum RunnerOs {
 
 impl RunnerOs {
     /// Read and parse `RUNNER_OS`. `None` when unset.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use actions_rs::RunnerOs;
+    /// match RunnerOs::from_env() {
+    ///     Some(RunnerOs::Linux) => { /* hosted ubuntu runner */ }
+    ///     Some(other) => { let _ = other; }
+    ///     None => { /* not on a runner */ }
+    /// }
+    /// ```
     #[must_use]
     pub fn from_env() -> Option<Self> {
         var(vars::RUNNER_OS).map(|v| match v.as_str() {
@@ -185,6 +228,13 @@ impl RunnerOs {
 }
 
 /// The runner CPU architecture, parsed from `RUNNER_ARCH`.
+///
+/// # Examples
+///
+/// ```
+/// use actions_rs::RunnerArch;
+/// assert_eq!(RunnerArch::X64, RunnerArch::X64);
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RunnerArch {
     /// 32-bit x86.
@@ -201,6 +251,15 @@ pub enum RunnerArch {
 
 impl RunnerArch {
     /// Read and parse `RUNNER_ARCH`. `None` when unset.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use actions_rs::RunnerArch;
+    /// if let Some(arch) = RunnerArch::from_env() {
+    ///     let _ = arch;
+    /// }
+    /// ```
     #[must_use]
     pub fn from_env() -> Option<Self> {
         var(vars::RUNNER_ARCH).map(|v| match v.as_str() {
@@ -236,18 +295,43 @@ pub struct Context;
 
 impl Context {
     /// Construct a context handle.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let ctx = actions_rs::Context::new();
+    /// let _ = ctx.sha(); // each accessor is a fresh env read
+    /// ```
     #[must_use]
     pub fn new() -> Self {
         Context
     }
 
     /// `owner/repo`, if set.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let ctx = actions_rs::Context::new();
+    /// if let Some(repo) = ctx.repository() {
+    ///     assert!(repo.contains('/'));
+    /// }
+    /// ```
     #[must_use]
     pub fn repository(&self) -> Option<String> {
         var(vars::GITHUB_REPOSITORY)
     }
 
     /// `(owner, repo)` split from [`Context::repository`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let ctx = actions_rs::Context::new();
+    /// if let Some((owner, repo)) = ctx.repo_parts() {
+    ///     assert!(!owner.is_empty() && !repo.is_empty());
+    /// }
+    /// ```
     #[must_use]
     pub fn repo_parts(&self) -> Option<(String, String)> {
         let full = self.repository()?;
@@ -256,108 +340,256 @@ impl Context {
     }
 
     /// Repository owner login.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// if let Some(owner) = actions_rs::Context::new().repository_owner() {
+    ///     assert!(!owner.is_empty());
+    /// }
+    /// ```
     #[must_use]
     pub fn repository_owner(&self) -> Option<String> {
         var(vars::GITHUB_REPOSITORY_OWNER)
     }
 
     /// Commit SHA that triggered the run.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// if let Some(sha) = actions_rs::Context::new().sha() {
+    ///     assert!(!sha.is_empty());
+    /// }
+    /// ```
     #[must_use]
     pub fn sha(&self) -> Option<String> {
         var(vars::GITHUB_SHA)
     }
 
     /// Full git ref, e.g. `refs/heads/main`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// if let Some(r) = actions_rs::Context::new().git_ref() {
+    ///     assert!(!r.is_empty());
+    /// }
+    /// ```
     #[must_use]
     pub fn git_ref(&self) -> Option<String> {
         var(vars::GITHUB_REF)
     }
 
     /// Short ref name, e.g. `main`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// if let Some(name) = actions_rs::Context::new().ref_name() {
+    ///     assert!(!name.is_empty());
+    /// }
+    /// ```
     #[must_use]
     pub fn ref_name(&self) -> Option<String> {
         var(vars::GITHUB_REF_NAME)
     }
 
     /// `branch` or `tag`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// if let Some(t) = actions_rs::Context::new().ref_type() {
+    ///     assert!(t == "branch" || t == "tag");
+    /// }
+    /// ```
     #[must_use]
     pub fn ref_type(&self) -> Option<String> {
         var(vars::GITHUB_REF_TYPE)
     }
 
     /// PR head ref (empty/`None` outside pull requests).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // `None` for `push` events; `Some(branch)` on a pull request.
+    /// let ctx = actions_rs::Context::new();
+    /// if let Some(head) = ctx.head_ref() {
+    ///     assert!(!head.is_empty());
+    /// }
+    /// ```
     #[must_use]
     pub fn head_ref(&self) -> Option<String> {
         var(vars::GITHUB_HEAD_REF)
     }
 
     /// PR base ref (empty/`None` outside pull requests).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// if let Some(base) = actions_rs::Context::new().base_ref() {
+    ///     assert!(!base.is_empty()); // e.g. "main"
+    /// }
+    /// ```
     #[must_use]
     pub fn base_ref(&self) -> Option<String> {
         var(vars::GITHUB_BASE_REF)
     }
 
     /// Event name, e.g. `push`, `pull_request`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let ctx = actions_rs::Context::new();
+    /// if ctx.event_name().as_deref() == Some("pull_request") {
+    ///     actions_rs::log::info("triggered by a PR");
+    /// }
+    /// ```
     #[must_use]
     pub fn event_name(&self) -> Option<String> {
         var(vars::GITHUB_EVENT_NAME)
     }
 
     /// Path to the webhook payload JSON file.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // The crate is serde-free, so you parse the JSON yourself if needed.
+    /// if let Some(path) = actions_rs::Context::new().event_path() {
+    ///     let _payload = std::fs::read_to_string(path);
+    /// }
+    /// ```
     #[must_use]
     pub fn event_path(&self) -> Option<PathBuf> {
         var(vars::GITHUB_EVENT_PATH).map(PathBuf::from)
     }
 
     /// Workspace directory (checked-out repo root).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// if let Some(ws) = actions_rs::Context::new().workspace() {
+    ///     let _manifest = ws.join("Cargo.toml");
+    /// }
+    /// ```
     #[must_use]
     pub fn workspace(&self) -> Option<PathBuf> {
         var(vars::GITHUB_WORKSPACE).map(PathBuf::from)
     }
 
     /// Workflow name.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// if let Some(wf) = actions_rs::Context::new().workflow() {
+    ///     assert!(!wf.is_empty());
+    /// }
+    /// ```
     #[must_use]
     pub fn workflow(&self) -> Option<String> {
         var(vars::GITHUB_WORKFLOW)
     }
 
     /// Current job id.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// if let Some(job) = actions_rs::Context::new().job() {
+    ///     assert!(!job.is_empty()); // the `jobs:` map key, not its `name:`
+    /// }
+    /// ```
     #[must_use]
     pub fn job(&self) -> Option<String> {
         var(vars::GITHUB_JOB)
     }
 
     /// Unique numeric run id.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// if let Some(id) = actions_rs::Context::new().run_id() {
+    ///     let _url = format!("https://github.com/o/r/actions/runs/{id}");
+    /// }
+    /// ```
     #[must_use]
     pub fn run_id(&self) -> Option<u64> {
         var(vars::GITHUB_RUN_ID)?.parse().ok()
     }
 
     /// Per-workflow incrementing run number.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// if let Some(n) = actions_rs::Context::new().run_number() {
+    ///     let _ = n; // stable across re-runs, unlike `run_id`
+    /// }
+    /// ```
     #[must_use]
     pub fn run_number(&self) -> Option<u64> {
         var(vars::GITHUB_RUN_NUMBER)?.parse().ok()
     }
 
     /// Login of the triggering user/app.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// if let Some(actor) = actions_rs::Context::new().actor() {
+    ///     assert!(!actor.is_empty());
+    /// }
+    /// ```
     #[must_use]
     pub fn actor(&self) -> Option<String> {
         var(vars::GITHUB_ACTOR)
     }
 
     /// Server URL (`https://github.com` or an Enterprise URL).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// if let Some(url) = actions_rs::Context::new().server_url() {
+    ///     assert!(url.starts_with("http"));
+    /// }
+    /// ```
     #[must_use]
     pub fn server_url(&self) -> Option<String> {
         var(vars::GITHUB_SERVER_URL)
     }
 
     /// REST API base URL.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// if let Some(api) = actions_rs::Context::new().api_url() {
+    ///     assert!(api.starts_with("http"));
+    /// }
+    /// ```
     #[must_use]
     pub fn api_url(&self) -> Option<String> {
         var(vars::GITHUB_API_URL)
     }
 
     /// GraphQL API URL.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// if let Some(gql) = actions_rs::Context::new().graphql_url() {
+    ///     assert!(gql.starts_with("http"));
+    /// }
+    /// ```
     #[must_use]
     pub fn graphql_url(&self) -> Option<String> {
         var(vars::GITHUB_GRAPHQL_URL)

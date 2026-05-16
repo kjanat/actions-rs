@@ -8,6 +8,14 @@
 use crate::command::WorkflowCommand;
 
 /// Which annotation channel to emit on.
+///
+/// # Examples
+///
+/// ```
+/// use actions_rs::{Annotation, AnnotationKind};
+/// let c = Annotation::new().command(AnnotationKind::Warning, "heads up");
+/// assert_eq!(c.to_string(), "::warning::heads up");
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AnnotationKind {
     /// A neutral `::notice::` annotation.
@@ -30,6 +38,16 @@ impl AnnotationKind {
 }
 
 /// A valid annotation span.
+///
+/// # Examples
+///
+/// ```
+/// use actions_rs::{Annotation, AnnotationKind, AnnotationSpan};
+/// let c = Annotation::new()
+///     .span(AnnotationSpan::Column { line: 7, start: 3, end: Some(9) })
+///     .command(AnnotationKind::Error, "bad token");
+/// assert_eq!(c.to_string(), "::error line=7,col=3,endColumn=9::bad token");
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AnnotationSpan {
     /// A whole-line span.
@@ -81,12 +99,28 @@ pub struct Annotation {
 
 impl Annotation {
     /// Create an empty annotation (no location, no title).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use actions_rs::{Annotation, AnnotationKind};
+    /// let c = Annotation::new().command(AnnotationKind::Notice, "hi");
+    /// assert_eq!(c.to_string(), "::notice::hi");
+    /// ```
     #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Set the annotation title shown in the GitHub UI.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use actions_rs::{Annotation, AnnotationKind};
+    /// let c = Annotation::new().title("clippy").command(AnnotationKind::Warning, "w");
+    /// assert_eq!(c.to_string(), "::warning title=clippy::w");
+    /// ```
     #[must_use]
     pub fn title(mut self, title: impl Into<String>) -> Self {
         self.title = Some(title.into());
@@ -94,6 +128,14 @@ impl Annotation {
     }
 
     /// Set the file path the annotation refers to (relative to the workspace).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use actions_rs::{Annotation, AnnotationKind};
+    /// let c = Annotation::new().file("src/lib.rs").command(AnnotationKind::Error, "e");
+    /// assert_eq!(c.to_string(), "::error file=src/lib.rs::e");
+    /// ```
     #[must_use]
     pub fn file(mut self, file: impl Into<String>) -> Self {
         self.file = Some(file.into());
@@ -101,6 +143,14 @@ impl Annotation {
     }
 
     /// Set the (1-based) start line.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use actions_rs::{Annotation, AnnotationKind};
+    /// let c = Annotation::new().file("x").line(42).command(AnnotationKind::Warning, "w");
+    /// assert_eq!(c.to_string(), "::warning file=x,line=42::w");
+    /// ```
     #[must_use]
     pub fn line(mut self, line: u32) -> Self {
         self.line = Some(line);
@@ -108,6 +158,15 @@ impl Annotation {
     }
 
     /// Set the (1-based) end line of a multi-line span.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use actions_rs::{Annotation, AnnotationKind};
+    /// let c = Annotation::new().file("x").line(10).end_line(12)
+    ///     .command(AnnotationKind::Warning, "w");
+    /// assert_eq!(c.to_string(), "::warning file=x,line=10,endLine=12::w");
+    /// ```
     #[must_use]
     pub fn end_line(mut self, end_line: u32) -> Self {
         self.end_line = Some(end_line);
@@ -115,6 +174,15 @@ impl Annotation {
     }
 
     /// Set the (1-based) start column.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use actions_rs::{Annotation, AnnotationKind};
+    /// let c = Annotation::new().file("x").line(7).col(3)
+    ///     .command(AnnotationKind::Warning, "w");
+    /// assert_eq!(c.to_string(), "::warning file=x,line=7,col=3,endColumn=3::w");
+    /// ```
     #[must_use]
     pub fn col(mut self, col: u32) -> Self {
         self.col = Some(col);
@@ -122,6 +190,15 @@ impl Annotation {
     }
 
     /// Set the (1-based) end column.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use actions_rs::{Annotation, AnnotationKind};
+    /// let c = Annotation::new().file("x").line(7).col(3).end_column(9)
+    ///     .command(AnnotationKind::Warning, "w");
+    /// assert_eq!(c.to_string(), "::warning file=x,line=7,col=3,endColumn=9::w");
+    /// ```
     #[must_use]
     pub fn end_column(mut self, end_column: u32) -> Self {
         self.end_column = Some(end_column);
@@ -129,6 +206,16 @@ impl Annotation {
     }
 
     /// Replace the current location fields with a span that is valid by construction.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use actions_rs::{Annotation, AnnotationKind, AnnotationSpan};
+    /// let c = Annotation::new()
+    ///     .span(AnnotationSpan::Line { start: 4, end: Some(6) })
+    ///     .command(AnnotationKind::Notice, "block");
+    /// assert_eq!(c.to_string(), "::notice line=4,endLine=6::block");
+    /// ```
     #[must_use]
     pub fn span(mut self, span: AnnotationSpan) -> Self {
         match span {
@@ -152,6 +239,15 @@ impl Annotation {
     /// Useful for testing or custom sinks.
     ///
     /// Property order matches `@actions/core`: `title, file, line, endLine, col, endColumn`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use actions_rs::{Annotation, AnnotationKind};
+    /// // Inspect the wire form without writing to stdout.
+    /// let cmd = Annotation::new().file("a.rs").line(1).command(AnnotationKind::Error, "e");
+    /// assert_eq!(cmd.to_string(), "::error file=a.rs,line=1::e");
+    /// ```
     #[must_use]
     pub fn command(&self, kind: AnnotationKind, message: impl Into<String>) -> WorkflowCommand {
         let line = self.line;
@@ -179,16 +275,37 @@ impl Annotation {
     }
 
     /// Emit a `::notice::` annotation to stdout.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use actions_rs::Annotation;
+    /// Annotation::new().file("README.md").line(1).notice("looks good");
+    /// ```
     pub fn notice(&self, message: impl Into<String>) {
         self.command(AnnotationKind::Notice, message).issue();
     }
 
     /// Emit a `::warning::` annotation to stdout.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use actions_rs::Annotation;
+    /// Annotation::new().file("src/lib.rs").line(42).title("lint").warning("unused import");
+    /// ```
     pub fn warning(&self, message: impl Into<String>) {
         self.command(AnnotationKind::Warning, message).issue();
     }
 
     /// Emit an `::error::` annotation to stdout.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use actions_rs::Annotation;
+    /// Annotation::new().file("src/main.rs").line(7).error("type mismatch");
+    /// ```
     pub fn error(&self, message: impl Into<String>) {
         self.command(AnnotationKind::Error, message).issue();
     }

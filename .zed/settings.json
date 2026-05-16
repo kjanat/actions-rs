@@ -30,6 +30,11 @@
 					"features": []
 				}
 			}
+		},
+		"cargo-tom": {
+			"initialization_options": {
+				"hide_docs_info_message": true
+			}
 		}
 	},
 	"languages": {

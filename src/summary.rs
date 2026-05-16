@@ -31,6 +31,17 @@ fn esc_attr(s: &str) -> String {
 }
 
 /// Text destined for a summary element.
+///
+/// # Examples
+///
+/// ```
+/// use actions_rs::{Summary, SummaryText};
+///
+/// let mut s = Summary::new();
+/// s.heading(SummaryText::escaped("a<b"), 2)         // escaped
+///  .heading(SummaryText::html("<em>raw</em>"), 3);  // verbatim
+/// assert_eq!(s.stringify(), "<h2>a&lt;b</h2>\n<h3><em>raw</em></h3>\n");
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SummaryText {
     /// Escape HTML metacharacters before rendering.
@@ -41,12 +52,30 @@ pub enum SummaryText {
 
 impl SummaryText {
     /// Escape `text` before rendering it into an element body.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use actions_rs::{Summary, SummaryText};
+    /// let mut s = Summary::new();
+    /// s.heading(SummaryText::escaped("1 < 2 & ok"), 1);
+    /// assert_eq!(s.stringify(), "<h1>1 &lt; 2 &amp; ok</h1>\n");
+    /// ```
     #[must_use]
     pub fn escaped(text: impl Into<String>) -> Self {
         Self::Escaped(text.into())
     }
 
     /// Insert trusted HTML verbatim into an element body.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use actions_rs::{Summary, SummaryText};
+    /// let mut s = Summary::new();
+    /// s.heading(SummaryText::html("<strong>done</strong>"), 2);
+    /// assert_eq!(s.stringify(), "<h2><strong>done</strong></h2>\n");
+    /// ```
     #[must_use]
     pub fn html(html: impl Into<String>) -> Self {
         Self::Html(html.into())
@@ -81,6 +110,15 @@ impl From<String> for SummaryText {
 /// A table cell.
 /// Use [`Cell::header`] for `<th>`; `colspan`/`rowspan` map to the matching HTML attributes.
 /// Cell content is escaped unless you pass [`SummaryText::html`].
+///
+/// # Examples
+///
+/// ```
+/// use actions_rs::{Cell, Summary};
+/// let mut s = Summary::new();
+/// s.table([vec![Cell::header("Name"), Cell::new("value")]]);
+/// assert!(s.stringify().contains(r#"<th colspan="1" rowspan="1">Name</th>"#));
+/// ```
 #[derive(Debug, Clone)]
 pub struct Cell {
     data: SummaryText,
@@ -91,6 +129,15 @@ pub struct Cell {
 
 impl Cell {
     /// A `<td>` cell.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use actions_rs::{Cell, Summary};
+    /// let mut s = Summary::new();
+    /// s.table([vec![Cell::new("x")]]);
+    /// assert_eq!(s.stringify(), "<table><tr><td colspan=\"1\" rowspan=\"1\">x</td></tr></table>\n");
+    /// ```
     #[must_use]
     pub fn new(data: impl Into<SummaryText>) -> Self {
         Self {
@@ -102,6 +149,15 @@ impl Cell {
     }
 
     /// A `<th>` header cell.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use actions_rs::{Cell, Summary};
+    /// let mut s = Summary::new();
+    /// s.table([vec![Cell::header("Col")]]);
+    /// assert_eq!(s.stringify(), "<table><tr><th colspan=\"1\" rowspan=\"1\">Col</th></tr></table>\n");
+    /// ```
     #[must_use]
     pub fn header(data: impl Into<SummaryText>) -> Self {
         Self {
@@ -111,6 +167,15 @@ impl Cell {
     }
 
     /// Set the column span (clamped to ≥ 1; the HTML spec forbids 0).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use actions_rs::{Cell, Summary};
+    /// let mut s = Summary::new();
+    /// s.table([vec![Cell::new("wide").colspan(0)]]); // 0 clamps to 1
+    /// assert!(s.stringify().contains(r#"colspan="1""#));
+    /// ```
     #[must_use]
     pub fn colspan(mut self, n: u32) -> Self {
         self.colspan = n.max(1);
@@ -118,6 +183,15 @@ impl Cell {
     }
 
     /// Set the row span (clamped to ≥ 1; the HTML spec forbids 0).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use actions_rs::{Cell, Summary};
+    /// let mut s = Summary::new();
+    /// s.table([vec![Cell::new("tall").rowspan(3)]]);
+    /// assert!(s.stringify().contains(r#"rowspan="3""#));
+    /// ```
     #[must_use]
     pub fn rowspan(mut self, n: u32) -> Self {
         self.rowspan = n.max(1);
@@ -172,6 +246,13 @@ pub struct Summary {
 
 impl Summary {
     /// Create an empty summary buffer.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let s = actions_rs::Summary::new();
+    /// assert!(s.is_empty());
+    /// ```
     #[must_use]
     pub fn new() -> Self {
         Self::default()
@@ -185,6 +266,14 @@ impl Summary {
     /// Passing untrusted input here is an HTML-injection vector.
     /// Use it only for trusted or already-escaped markup;
     /// for arbitrary text prefer [`Summary::code_block`] / [`Summary::heading`] etc., which escape.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut s = actions_rs::Summary::new();
+    /// s.raw("<div class=\"trusted\">ok</div>", true);
+    /// assert_eq!(s.stringify(), "<div class=\"trusted\">ok</div>\n");
+    /// ```
     pub fn raw(&mut self, text: impl AsRef<str>, eol: bool) -> &mut Self {
         self.buf.push_str(text.as_ref());
         if eol {
@@ -194,13 +283,29 @@ impl Summary {
     }
 
     /// Append a newline.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut s = actions_rs::Summary::new();
+    /// s.raw("a", false).eol().raw("b", false);
+    /// assert_eq!(s.stringify(), "a\nb");
+    /// ```
     pub fn eol(&mut self) -> &mut Self {
         self.buf.push('\n');
         self
     }
 
-    /// Append an `<h1>`–`<h6>` heading (`level` clamped to 1..=6`).
+    /// Append an `<h1>`–`<h6>` heading (`level` clamped to `1..=6`).
     /// Text is escaped unless you pass [`SummaryText::html`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut s = actions_rs::Summary::new();
+    /// s.heading("Result", 9); // level clamps to 6
+    /// assert_eq!(s.stringify(), "<h6>Result</h6>\n");
+    /// ```
     pub fn heading(&mut self, text: impl Into<SummaryText>, level: u8) -> &mut Self {
         let l = level.clamp(1, 6);
         let text = text.into().into_html();
@@ -209,6 +314,14 @@ impl Summary {
     }
 
     /// Append a fenced `<pre><code>` block with an optional language hint.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut s = actions_rs::Summary::new();
+    /// s.code_block("cargo test", Some("sh"));
+    /// assert_eq!(s.stringify(), "<pre lang=\"sh\"><code>cargo test</code></pre>\n");
+    /// ```
     pub fn code_block(&mut self, code: impl AsRef<str>, lang: Option<&str>) -> &mut Self {
         let code = esc_text(code.as_ref());
         match lang {
@@ -227,6 +340,14 @@ impl Summary {
     }
 
     /// Append a `<ul>` (or `<ol>` when `ordered`) of `items`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut s = actions_rs::Summary::new();
+    /// s.list(["a", "b"], false);
+    /// assert_eq!(s.stringify(), "<ul><li>a</li><li>b</li></ul>\n");
+    /// ```
     pub fn list<I, S>(&mut self, items: I, ordered: bool) -> &mut Self
     where
         I: IntoIterator<Item = S>,
@@ -245,6 +366,19 @@ impl Summary {
 
     /// Append a `<table>`.
     /// Each row is a list of [`Cell`]s.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use actions_rs::{Cell, Summary};
+    /// let mut s = Summary::new();
+    /// s.table([vec![Cell::header("k"), Cell::new("v")]]);
+    /// assert_eq!(
+    ///     s.stringify(),
+    ///     "<table><tr><th colspan=\"1\" rowspan=\"1\">k</th>\
+    ///      <td colspan=\"1\" rowspan=\"1\">v</td></tr></table>\n"
+    /// );
+    /// ```
     pub fn table(&mut self, rows: impl IntoIterator<Item = Vec<Cell>>) -> &mut Self {
         self.buf.push_str("<table>");
         for row in rows {
@@ -267,6 +401,14 @@ impl Summary {
 
     /// Append a `<details>` block with a `<summary>` label.
     /// Both text nodes are escaped unless you pass [`SummaryText::html`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut s = actions_rs::Summary::new();
+    /// s.details("logs", "all green");
+    /// assert_eq!(s.stringify(), "<details><summary>logs</summary>all green</details>\n");
+    /// ```
     pub fn details(
         &mut self,
         label: impl Into<SummaryText>,
@@ -284,6 +426,17 @@ impl Summary {
 
     /// Append an `<img>`.
     /// `size` is an optional `(width, height)` in pixels.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut s = actions_rs::Summary::new();
+    /// s.image("cov.svg", "coverage", Some((120, 20)));
+    /// assert_eq!(
+    ///     s.stringify(),
+    ///     "<img src=\"cov.svg\" alt=\"coverage\" width=\"120\" height=\"20\">\n"
+    /// );
+    /// ```
     pub fn image(
         &mut self,
         src: impl AsRef<str>,
@@ -305,6 +458,14 @@ impl Summary {
     /// Append an `<a>` link.
     /// The link text is escaped unless you pass [`SummaryText::html`];
     /// `href` is always attribute-escaped.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut s = actions_rs::Summary::new();
+    /// s.link("run", "https://example.com/run/1");
+    /// assert_eq!(s.stringify(), "<a href=\"https://example.com/run/1\">run</a>\n");
+    /// ```
     pub fn link(&mut self, text: impl Into<SummaryText>, href: impl AsRef<str>) -> &mut Self {
         let text = text.into().into_html();
         let _ = writeln!(
@@ -318,6 +479,14 @@ impl Summary {
 
     /// Append a `<blockquote>` with an optional `cite` URL.
     /// Quote text is escaped unless you pass [`SummaryText::html`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut s = actions_rs::Summary::new();
+    /// s.quote("ship it", None);
+    /// assert_eq!(s.stringify(), "<blockquote>ship it</blockquote>\n");
+    /// ```
     pub fn quote(&mut self, text: impl Into<SummaryText>, cite: Option<&str>) -> &mut Self {
         let text = text.into().into_html();
         match cite {
@@ -337,30 +506,72 @@ impl Summary {
     }
 
     /// Append an `<hr>`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut s = actions_rs::Summary::new();
+    /// s.separator();
+    /// assert_eq!(s.stringify(), "<hr>\n");
+    /// ```
     pub fn separator(&mut self) -> &mut Self {
         self.buf.push_str("<hr>\n");
         self
     }
 
     /// Append a `<br>`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut s = actions_rs::Summary::new();
+    /// s.break_();
+    /// assert_eq!(s.stringify(), "<br>\n");
+    /// ```
     pub fn break_(&mut self) -> &mut Self {
         self.buf.push_str("<br>\n");
         self
     }
 
     /// The buffered summary content.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut s = actions_rs::Summary::new();
+    /// s.heading("Hi", 1);
+    /// assert_eq!(s.stringify(), "<h1>Hi</h1>\n");
+    /// ```
     #[must_use]
     pub fn stringify(&self) -> &str {
         &self.buf
     }
 
     /// Whether nothing has been buffered yet.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut s = actions_rs::Summary::new();
+    /// assert!(s.is_empty());
+    /// s.eol();
+    /// assert!(!s.is_empty());
+    /// ```
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.buf.is_empty()
     }
 
     /// Clear the buffer (does not touch the file).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut s = actions_rs::Summary::new();
+    /// s.heading("x", 1);
+    /// s.clear();
+    /// assert!(s.is_empty());
+    /// ```
     pub fn clear(&mut self) -> &mut Self {
         self.buf.clear();
         self
@@ -410,6 +621,15 @@ impl Summary {
     ///
     /// # Errors
     /// [`Error::SummaryTooLarge`] if the buffer exceeds 1 MiB, or an I/O error.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// let mut s = actions_rs::Summary::new();
+    /// s.heading("Build passed", 2);
+    /// s.write()?; // appends to $GITHUB_STEP_SUMMARY
+    /// # Ok::<(), actions_rs::Error>(())
+    /// ```
     pub fn write(&mut self) -> Result<()> {
         self.write_inner(true)
     }
@@ -418,6 +638,15 @@ impl Summary {
     ///
     /// # Errors
     /// [`Error::SummaryTooLarge`] if the buffer exceeds 1 MiB, or an I/O error.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// let mut s = actions_rs::Summary::new();
+    /// s.heading("Replaces any prior summary", 2);
+    /// s.write_overwrite()?;
+    /// # Ok::<(), actions_rs::Error>(())
+    /// ```
     pub fn write_overwrite(&mut self) -> Result<()> {
         self.write_inner(false)
     }

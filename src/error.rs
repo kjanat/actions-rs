@@ -8,6 +8,18 @@ use std::path::PathBuf;
 /// Errors produced by fallible `actions-rs` operations.
 ///
 /// `#[non_exhaustive]` so new variants can be added without a breaking change.
+///
+/// # Examples
+///
+/// ```
+/// use actions_rs::Error;
+///
+/// // Reserved names are rejected before any write happens.
+/// let err = actions_rs::output::export_var("GITHUB_TOKEN", "x").unwrap_err();
+/// assert!(matches!(err, Error::ReservedName(_)));
+/// // `Display` is human-readable.
+/// assert!(err.to_string().contains("reserved"));
+/// ```
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum Error {

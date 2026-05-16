@@ -1,0 +1,3 @@
+[build]
+rustdocflags = ["-Zcrate-attr=feature(rustdoc_missing_doc_code_examples)", "-D", "warnings"]
+rustflags    = ["-D", "warnings"]

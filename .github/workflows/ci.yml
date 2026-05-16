@@ -13,23 +13,21 @@ jobs:
     name: check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-        with: { components: "clippy, rustfmt" }
-      - run: cargo fmt --check
-      - run: cargo test --all-targets --all-features
-      - run: cargo test --doc
-      - run: cargo clippy --all-targets -- -D warnings
-      - run: cargo doc --no-deps
-        env: { RUSTDOCFLAGS: -D warnings }
+      - { uses: actions/checkout@v6 }
+      - { uses: kjanat/runner@master, with: { version: latest } }
+      - { uses: dtolnay/rust-toolchain@stable, with: { components: "clippy, rustfmt" } }
+      - run: run fmt-check
+      - run: run test-all
+      - run: run doc-test
+      - run: run clippy-strict
+      - run: rustup run nightly -- run doc-nightly
 
   roundtrip:
     name: round-trip
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-      - run: cargo run --quiet --example ci_selfcheck
-        shell: bash
-      - run: cargo run --quiet --example ci_selfcheck
-        shell: pwsh
+      - { uses: actions/checkout@v6 }
+      - { uses: kjanat/runner@master, with: { version: latest } }
+      - { uses: dtolnay/rust-toolchain@stable }
+      - { run: run selfcheck, shell: bash }
+      - { run: run selfcheck, shell: pwsh }

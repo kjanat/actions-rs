@@ -17,6 +17,17 @@ use crate::escape::{escape_data, escape_property};
 /// always safe to write to stdout.
 ///
 /// [`Display`]: std::fmt::Display
+///
+/// # Examples
+///
+/// ```
+/// use actions_rs::WorkflowCommand;
+///
+/// let cmd = WorkflowCommand::new("error")
+///     .property("file", "src/a,b.rs") // `,` is property-encoded
+///     .message("bad: x\ny");          // `\n` is data-encoded
+/// assert_eq!(cmd.to_string(), "::error file=src/a%2Cb.rs::bad: x%0Ay");
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkflowCommand {
     name: &'static str,
@@ -26,6 +37,13 @@ pub struct WorkflowCommand {
 
 impl WorkflowCommand {
     /// Create a command with the given name and an empty message.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use actions_rs::WorkflowCommand;
+    /// assert_eq!(WorkflowCommand::new("endgroup").to_string(), "::endgroup::");
+    /// ```
     #[must_use]
     pub fn new(name: &'static str) -> Self {
         Self {
@@ -36,6 +54,14 @@ impl WorkflowCommand {
     }
 
     /// Set the command message (the segment after the final `::`).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use actions_rs::WorkflowCommand;
+    /// let c = WorkflowCommand::new("warning").message("low disk");
+    /// assert_eq!(c.to_string(), "::warning::low disk");
+    /// ```
     #[must_use]
     pub fn message(mut self, message: impl Into<String>) -> Self {
         self.message = message.into();
@@ -44,6 +70,14 @@ impl WorkflowCommand {
 
     /// Append a property.
     /// The value is percent-encoded on render.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use actions_rs::WorkflowCommand;
+    /// let c = WorkflowCommand::new("notice").property("line", "42").message("m");
+    /// assert_eq!(c.to_string(), "::notice line=42::m");
+    /// ```
     #[must_use]
     pub fn property(mut self, key: &'static str, value: impl Into<String>) -> Self {
         self.properties.push((key, value.into()));
@@ -51,6 +85,17 @@ impl WorkflowCommand {
     }
 
     /// Append a property only when `value` is `Some`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use actions_rs::WorkflowCommand;
+    /// let c = WorkflowCommand::new("notice")
+    ///     .property_opt("file", Option::<String>::None) // skipped
+    ///     .property_opt("line", Some("10"))
+    ///     .message("m");
+    /// assert_eq!(c.to_string(), "::notice line=10::m");
+    /// ```
     #[must_use]
     pub fn property_opt(self, key: &'static str, value: Option<impl Into<String>>) -> Self {
         match value {
@@ -65,6 +110,15 @@ impl WorkflowCommand {
     ///
     /// # Errors
     /// Propagates any write error from `w`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use actions_rs::WorkflowCommand;
+    /// let mut buf = Vec::new();
+    /// WorkflowCommand::new("debug").message("d").issue_to(&mut buf).unwrap();
+    /// assert_eq!(buf, b"::debug::d\n");
+    /// ```
     pub fn issue_to<W: Write>(&self, mut w: W) -> io::Result<()> {
         writeln!(w, "{self}")
     }
@@ -74,6 +128,14 @@ impl WorkflowCommand {
     /// Stdout is the runner's command channel;
     /// a failed write here cannot be meaningfully recovered from inside an action,
     /// so the result is dropped deliberately (matching `@actions/core` behaviour).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use actions_rs::WorkflowCommand;
+    /// // Emit a command the higher-level API does not cover.
+    /// WorkflowCommand::new("add-matcher").message(".github/pm.json").issue();
+    /// ```
     pub fn issue(&self) {
         let _ = self.issue_to(io::stdout().lock());
     }

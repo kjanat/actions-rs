@@ -1,0 +1,12 @@
+[alias]
+lint          = ["clippy", "--all-targets", "--", "-D", "warnings"]
+clippy-strict = "lint"
+doc-nightly   = ["--config", ".cargo/nightly.toml", "doc"]
+doc-test      = ["test", "--doc"]
+test-all      = ["test", "--all-targets", "--all-features"]
+selfcheck     = ["run", "--quiet", "--example", "ci_selfcheck"]
+fmt-check     = ["fmt", "--check"]
+
+[build]
+rustdocflags = ["-D", "warnings"]
+rustflags    = ["-D", "warnings"]

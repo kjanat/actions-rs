@@ -4,12 +4,13 @@
 //! `export_var` / `add_path` do not: GitHub retired `::set-env::` and `::add-path::`,
 //! so these operations require the corresponding environment file path from the runner.
 //!
-//! Because mutating the process environment is `unsafe` in edition 2024 and this crate forbids `unsafe`,
+//! Because mutating the process environment is [`unsafe` in edition 2024][set-var] and this crate forbids `unsafe`,
 //! same-process parity is provided through a safe overlay:\
 //! use [`overlay_var`], [`overlay_path`] or [`apply_overlay`] when you need child processes to observe
 //! `export_var` / `add_path` changes.
 //!
 //! [dep]: https://github.blog/changelog/2022-10-11-github-actions-deprecating-save-state-and-set-output-commands/
+//! [set-var]: https://doc.rust-lang.org/edition-guide/rust-2024/newly-unsafe-functions.html#stdenvset_var-remove_var
 
 use std::collections::BTreeMap;
 use std::fmt::Display;
@@ -79,6 +80,14 @@ fn is_reserved(name: &str) -> bool {
 ///
 /// Safe substitute for the `process.env` write `@actions/core`'s
 /// `exportVariable` performs and [`export_var`] deliberately omits.
+///
+/// # Examples
+///
+/// ```
+/// // With nothing exported it transparently falls back to the real
+/// // environment; unknown names are `None`.
+/// assert_eq!(actions_rs::output::overlay_var("DEFINITELY_UNSET_XZ"), None);
+/// ```
 #[must_use]
 pub fn overlay_var(name: &str) -> Option<String> {
     let overlay = lock_overlay();
@@ -97,6 +106,14 @@ pub fn overlay_var(name: &str) -> Option<String> {
 ///
 /// Safe substitute for the `process.env.PATH` write `@actions/core`'s
 /// `addPath` performs and [`add_path`] deliberately omits.
+///
+/// # Examples
+///
+/// ```
+/// // Before any `add_path`, this is just the inherited `PATH`.
+/// let path = actions_rs::output::overlay_path();
+/// assert_eq!(path, std::env::var("PATH").ok());
+/// ```
 #[must_use]
 pub fn overlay_path() -> Option<String> {
     let overlay = lock_overlay();
@@ -108,6 +125,16 @@ pub fn overlay_path() -> Option<String> {
 /// The single safe equivalent of the `process.env` mutations `@actions/core`'s
 /// `exportVariable` / `addPath` perform: spawn children through this so they
 /// observe [`export_var`] / [`add_path`] changes without `unsafe` env writes.
+///
+/// # Examples
+///
+/// ```no_run
+/// use std::process::Command;
+/// let mut cmd = Command::new("cargo");
+/// // Child sees everything previously set via `export_var` / `add_path`.
+/// actions_rs::output::apply_overlay(&mut cmd).arg("build");
+/// cmd.status().unwrap();
+/// ```
 pub fn apply_overlay(command: &mut Command) -> &mut Command {
     let overlay = lock_overlay();
     for (name, value) in &overlay.vars {
@@ -157,6 +184,14 @@ pub fn set_output(name: &str, value: impl Display) -> Result<()> {
 /// [`crate::Error::InvalidName`] when `name` contains a carriage return or line feed;\
 /// [`crate::Error::DelimiterCollision`] on the (astronomically unlikely) heredoc-delimiter clash;\
 /// otherwise [`crate::Error`] on a file-command write failure.
+///
+/// # Examples
+///
+/// ```no_run
+/// // In the main step: stash a value for the `post` step to read.
+/// actions_rs::output::save_state("cache-hit", true)?;
+/// # Ok::<(), actions_rs::Error>(())
+/// ```
 pub fn save_state(name: &str, value: impl Display) -> Result<()> {
     let value = value.to_string();
     let msg = key_value_message(name, &value)?;
@@ -174,6 +209,13 @@ pub fn save_state(name: &str, value: impl Display) -> Result<()> {
 
 /// Read state saved by a previous phase via [`save_state`] (the runner exposes it as `STATE_<name>`).
 /// `None` when unset.
+///
+/// # Examples
+///
+/// ```
+/// // In the `post` step, with nothing stashed:
+/// assert_eq!(actions_rs::output::get_state("never-saved"), None);
+/// ```
 #[must_use]
 pub fn get_state(name: &str) -> Option<String> {
     std::env::var(format!("STATE_{name}")).ok()
@@ -182,7 +224,7 @@ pub fn get_state(name: &str) -> Option<String> {
 /// Export an environment variable to subsequent steps via `GITHUB_ENV`.
 ///
 /// Does **not** mutate the current process environment — subsequent steps run in fresh processes and read the env file;
-/// mutating `std::env` here would be `unsafe` in edition 2024.
+/// mutating `std::env` here would be [`unsafe` in edition 2024][unsafe].
 /// Use [`overlay_var`] / [`apply_overlay`] when the current process needs to observe the change safely.
 ///
 /// # Errors
@@ -198,6 +240,8 @@ pub fn get_state(name: &str) -> Option<String> {
 /// actions_rs::output::export_var("BUILD_PROFILE", "release")?;
 /// # Ok::<(), actions_rs::Error>(())
 /// ```
+///
+/// [unsafe]: https://doc.rust-lang.org/edition-guide/rust-2024/newly-unsafe-functions.html#stdenvset_var-remove_var
 pub fn export_var(name: &str, value: impl Display) -> Result<()> {
     if is_reserved(name) {
         return Err(crate::Error::ReservedName(name.to_owned()));
@@ -222,6 +266,14 @@ pub fn export_var(name: &str, value: impl Display) -> Result<()> {
 /// [`crate::Error::InvalidName`] when `dir` contains a carriage return or line feed;\
 /// [`crate::Error::UnavailableFileCommand`] when `GITHUB_PATH` is unset;\
 /// otherwise on a file-command write failure.
+///
+/// # Examples
+///
+/// ```no_run
+/// // Make a freshly-installed tool visible to later steps.
+/// actions_rs::output::add_path("/opt/mytool/bin")?;
+/// # Ok::<(), actions_rs::Error>(())
+/// ```
 pub fn add_path(dir: impl Display) -> Result<()> {
     let dir = dir.to_string();
     // GITHUB_PATH is one directory per line; a `\r`/`\n` would inject extra

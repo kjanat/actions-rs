@@ -1,23 +1,34 @@
+#:schema tombi://www.schemastore.org/cargo.json
+
 [package]
 name          = "actions-rs"
 version       = "0.1.0"
+authors       = ["Kaj Kowalski <info@kajkowalski.nl>"]                                                                                                            # tombi: lint.rules = { deprecated.disabled = true, unused-noqa.disabled = true }
 edition       = "2024"
 rust-version  = "1.95"
 description   = "Zero-dependency toolkit for writing GitHub Actions in Rust: annotations, workflow commands, environment files, typed inputs and job summaries."
-authors       = ["Kaj Kowalski <info@kajkowalski.nl>"]
-license       = "MIT OR Apache-2.0"
-repository    = "https://github.com/kjanat/actions-rs"
-homepage      = "https://github.com/kjanat/actions-rs"
+documentation = "https://docs.rs/actions-rs"
 readme        = "README.md"
+homepage      = "https://github.com/kjanat/actions-rs"
+repository    = "https://github.com/kjanat/actions-rs"
+license       = "MIT OR Apache-2.0"
 keywords      = ["actions", "ci", "github-actions", "toolkit", "workflow"]
 categories    = ["api-bindings", "development-tools::build-utils"]
-documentation = "https://docs.rs/actions-rs"
 include       = ["/LICENSE-*", "/README.md", "/examples", "/src", "/tests"]
 
-[dependencies]
+[lints]
+clippy.all        = "warn"
+rust.missing_docs = "warn"
 
-[lints.clippy]
-all = "warn"
-
-[lints.rust]
-missing_docs = "warn"
+[lints.rustdoc]
+bare_urls                    = "warn"
+broken_intra_doc_links       = "warn"
+invalid_codeblock_attributes = "warn"
+invalid_html_tags            = "warn"
+invalid_rust_codeblocks      = "warn"
+missing_crate_level_docs     = "warn"
+missing_doc_code_examples    = "warn"
+private_doc_tests            = "warn"
+private_intra_doc_links      = "warn"
+redundant_explicit_links     = "warn"
+unescaped_backticks          = "warn"

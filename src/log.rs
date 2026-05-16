@@ -21,33 +21,71 @@ fn emit(cmd: &WorkflowCommand) {
 
 /// Write a plain line to the log (no annotation).
 /// Equivalent to `println!`, provided for symmetry with the other log functions.
+///
+/// # Examples
+///
+/// ```
+/// actions_rs::log::info("starting build");
+/// ```
 pub fn info(message: impl AsRef<str>) {
     let _ = writeln!(io::stdout().lock(), "{}", message.as_ref());
 }
 
 /// Emit a `::debug::` message.
 /// Only visible when step-debug logging is enabled (the `ACTIONS_STEP_DEBUG` secret, surfaced as `RUNNER_DEBUG=1`).
+///
+/// # Examples
+///
+/// ```
+/// actions_rs::log::debug("cache key = v2-linux");
+/// ```
 pub fn debug(message: impl Into<String>) {
     emit(&WorkflowCommand::new("debug").message(message));
 }
 
 /// Emit a `::notice::` annotation with no location.
 /// For located annotations use [`crate::Annotation`].
+///
+/// # Examples
+///
+/// ```
+/// actions_rs::log::notice("published 3 artifacts");
+/// ```
 pub fn notice(message: impl Into<String>) {
     emit(&WorkflowCommand::new("notice").message(message));
 }
 
 /// Emit a `::warning::` annotation with no location.
+///
+/// # Examples
+///
+/// ```
+/// actions_rs::log::warning("deprecated input `path`; use `dir`");
+/// ```
 pub fn warning(message: impl Into<String>) {
     emit(&WorkflowCommand::new("warning").message(message));
 }
 
 /// Emit an `::error::` annotation with no location.
+///
+/// # Examples
+///
+/// ```
+/// actions_rs::log::error("manifest checksum mismatch");
+/// ```
 pub fn error(message: impl Into<String>) {
     emit(&WorkflowCommand::new("error").message(message));
 }
 
 /// Whether step-debug logging is enabled (`RUNNER_DEBUG == "1"`).
+///
+/// # Examples
+///
+/// ```
+/// if actions_rs::log::is_debug() {
+///     actions_rs::log::debug("verbose diagnostics enabled");
+/// }
+/// ```
 #[must_use]
 pub fn is_debug() -> bool {
     env::is_debug()
@@ -57,11 +95,25 @@ pub fn is_debug() -> bool {
 ///
 /// Note this only affects output produced *after* the call;
 /// anything already logged is not retroactively masked.
+///
+/// # Examples
+///
+/// ```
+/// let token = "ghp_example";
+/// actions_rs::log::mask(token);
+/// // Any later log line containing `ghp_example` is shown as `***`.
+/// ```
 pub fn mask(value: impl Into<String>) {
     emit(&WorkflowCommand::new("add-mask").message(value));
 }
 
 /// Alias for [`mask`], named after `@actions/core`'s `setSecret`.
+///
+/// # Examples
+///
+/// ```
+/// actions_rs::log::set_secret(std::env::var("API_KEY").unwrap_or_default());
+/// ```
 pub fn set_secret(value: impl Into<String>) {
     mask(value);
 }
@@ -87,6 +139,14 @@ pub fn set_failed(message: impl Into<String>) {
 }
 
 /// Whether [`set_failed`] has been called in this process.
+///
+/// # Examples
+///
+/// ```
+/// assert!(!actions_rs::log::is_failed());
+/// actions_rs::log::set_failed("step failed");
+/// assert!(actions_rs::log::is_failed());
+/// ```
 #[must_use]
 pub fn is_failed() -> bool {
     FAILED.load(Ordering::SeqCst)
@@ -97,6 +157,16 @@ pub fn is_failed() -> bool {
 ///
 /// [`ExitCode::FAILURE`]: std::process::ExitCode::FAILURE
 /// [`ExitCode::SUCCESS`]: std::process::ExitCode::SUCCESS
+///
+/// # Examples
+///
+/// ```no_run
+/// use std::process::ExitCode;
+/// fn main() -> ExitCode {
+///     // ... action body; call `set_failed` on any recoverable failure ...
+///     actions_rs::log::exit_code()
+/// }
+/// ```
 #[must_use]
 pub fn exit_code() -> std::process::ExitCode {
     if is_failed() {
@@ -108,28 +178,68 @@ pub fn exit_code() -> std::process::ExitCode {
 
 /// Emit `message` as an error annotation and immediately exit the process with code `1`.
 /// Convenience wrapper around [`set_failed`] that does not wait for `main` to return [`exit_code`].
+///
+/// # Examples
+///
+/// ```no_run
+/// let Some(input) = std::env::var_os("INPUT_TARGET") else {
+///     actions_rs::log::fail_now("required input `target` missing");
+/// };
+/// ```
 pub fn fail_now(message: impl Into<String>) -> ! {
     set_failed(message);
     std::process::exit(1)
 }
 
 /// Toggle command echoing (`::echo::on` / `::echo::off`).
+///
+/// # Examples
+///
+/// ```
+/// actions_rs::log::echo(true);  // runner echoes subsequent workflow commands
+/// actions_rs::log::echo(false);
+/// ```
 pub fn echo(on: bool) {
     emit(&WorkflowCommand::new("echo").message(if on { "on" } else { "off" }));
 }
 
 /// Begin a collapsible log group.
 /// Prefer [`group`], which closes the group automatically even on panic.
+///
+/// # Examples
+///
+/// ```
+/// actions_rs::log::start_group("install");
+/// actions_rs::log::info("downloading toolchain");
+/// actions_rs::log::end_group();
+/// ```
 pub fn start_group(name: impl Into<String>) {
     emit(&WorkflowCommand::new("group").message(name));
 }
 
 /// End the current collapsible log group.
+///
+/// # Examples
+///
+/// ```
+/// actions_rs::log::start_group("tests");
+/// actions_rs::log::info("running");
+/// actions_rs::log::end_group();
+/// ```
 pub fn end_group() {
     emit(&WorkflowCommand::new("endgroup"));
 }
 
 /// RAII guard returned by [`group_guard`]; emits `::endgroup::` on drop.
+///
+/// # Examples
+///
+/// ```
+/// {
+///     let _g = actions_rs::log::group_guard("lint");
+///     actions_rs::log::info("clippy clean");
+/// } // `::endgroup::` emitted here
+/// ```
 #[must_use = "the group ends when this guard is dropped"]
 pub struct GroupGuard(());
 
@@ -140,6 +250,17 @@ impl Drop for GroupGuard {
 }
 
 /// Start a group and return a guard that closes it when dropped (including on panic / early return).
+///
+/// # Examples
+///
+/// ```
+/// fn step() -> Result<(), &'static str> {
+///     let _g = actions_rs::log::group_guard("deploy");
+///     // early return still closes the group via the guard's Drop
+///     Err("boom")
+/// }
+/// assert!(step().is_err());
+/// ```
 pub fn group_guard(name: impl Into<String>) -> GroupGuard {
     start_group(name);
     GroupGuard(())
@@ -164,6 +285,15 @@ pub fn group<R>(name: impl Into<String>, f: impl FnOnce() -> R) -> R {
 
 /// RAII guard returned by [`stop_commands`];
 /// emits the resume token on drop, re-enabling workflow-command processing.
+///
+/// # Examples
+///
+/// ```
+/// {
+///     let _g = actions_rs::log::stop_commands();
+///     println!("::not-a-command:: this line is not interpreted");
+/// } // command processing resumes here
+/// ```
 #[must_use = "command processing resumes when this guard is dropped"]
 pub struct StopGuard {
     token: String,
@@ -183,6 +313,16 @@ impl Drop for StopGuard {
 /// Useful when logging untrusted text that might otherwise be parsed as a `::command::`.
 ///
 /// The stop/resume token is randomly generated so untrusted content cannot guess it and resume command processing early.
+///
+/// # Examples
+///
+/// ```
+/// let untrusted = "::error::spoofed";
+/// {
+///     let _g = actions_rs::log::stop_commands();
+///     actions_rs::log::info(untrusted); // logged literally, not interpreted
+/// }
+/// ```
 pub fn stop_commands() -> StopGuard {
     let token = crate::file_command::random_token();
     emit(&WorkflowCommand::new("stop-commands").message(token.clone()));

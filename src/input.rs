@@ -14,6 +14,17 @@ use crate::error::{Error, Result};
 use crate::log;
 
 /// Options controlling how an input is read.
+///
+/// # Examples
+///
+/// ```
+/// use actions_rs::InputOptions;
+///
+/// // Required, but keep surrounding whitespace verbatim.
+/// let opts = InputOptions { required: true, trim: false };
+/// assert!(opts.required);
+/// assert_eq!(InputOptions::default().trim, true);
+/// ```
 #[derive(Debug, Clone, Copy)]
 pub struct InputOptions {
     /// Error with [`Error::MissingRequiredInput`] if the input is absent/empty.
@@ -34,6 +45,15 @@ impl Default for InputOptions {
 /// Compute the environment-variable key for an input name.
 ///
 /// `INPUT_` + `name.to_uppercase()` with ASCII spaces → `_`.
+///
+/// # Examples
+///
+/// ```
+/// use actions_rs::input::input_env_key;
+///
+/// assert_eq!(input_env_key("my input"), "INPUT_MY_INPUT");
+/// assert_eq!(input_env_key("my-input"), "INPUT_MY-INPUT"); // hyphen kept
+/// ```
 #[must_use]
 pub fn input_env_key(name: &str) -> String {
     format!("INPUT_{}", name.replace(' ', "_").to_uppercase())
@@ -49,6 +69,16 @@ fn raw(name: &str) -> Option<String> {
 /// [`Error::MissingRequiredInput`] when `options.required` and the **raw** input is absent or empty.\
 /// The required check runs *before* trimming (matching `@actions/core`): a whitespace-only required
 /// input passes the check and then trims to `""`.
+///
+/// # Examples
+///
+/// ```
+/// use actions_rs::{InputOptions, input::input_with};
+///
+/// // Unset + not required -> Ok("").
+/// let v = input_with("nope", InputOptions::default()).unwrap();
+/// assert_eq!(v, "");
+/// ```
 pub fn input_with(name: &str, options: InputOptions) -> Result<String> {
     let value = raw(name).unwrap_or_default();
     if options.required && value.is_empty() {
@@ -82,6 +112,14 @@ pub fn input(name: &str) -> String {
 ///
 /// # Errors
 /// [`Error::MissingRequiredInput`] when absent or empty.
+///
+/// # Examples
+///
+/// ```
+/// // `target` was never provided -> a typed error, not a panic.
+/// let err = actions_rs::input::input_required("target").unwrap_err();
+/// assert!(matches!(err, actions_rs::Error::MissingRequiredInput(_)));
+/// ```
 pub fn input_required(name: &str) -> Result<String> {
     input_with(
         name,
@@ -132,6 +170,13 @@ pub fn bool_input(name: &str) -> Result<bool> {
 
 /// Split a multiline input on `\n`, dropping empty lines.
 /// Each retained line is trimmed.
+///
+/// # Examples
+///
+/// ```
+/// // `paths` unset -> empty vec, never an error.
+/// assert!(actions_rs::input::multiline_input("paths").is_empty());
+/// ```
 #[must_use]
 pub fn multiline_input(name: &str) -> Vec<String> {
     multiline_input_with(name, InputOptions::default()).unwrap_or_default()
@@ -142,6 +187,16 @@ pub fn multiline_input(name: &str) -> Vec<String> {
 ///
 /// # Errors
 /// [`Error::MissingRequiredInput`] when `options.required` and the input is absent or empty.
+///
+/// # Examples
+///
+/// ```
+/// use actions_rs::{InputOptions, input::multiline_input_with};
+///
+/// // Optional + unset -> Ok(empty).
+/// let lines = multiline_input_with("globs", InputOptions::default()).unwrap();
+/// assert!(lines.is_empty());
+/// ```
 pub fn multiline_input_with(name: &str, options: InputOptions) -> Result<Vec<String>> {
     let value = input_with(
         name,
@@ -192,6 +247,13 @@ where
 /// Mask the (untrimmed) raw value of input `name` in subsequent logs.
 ///
 /// No-op when the input is unset.
+///
+/// # Examples
+///
+/// ```
+/// // Redact whatever was passed as the `token` input from later logs.
+/// actions_rs::input::mask_input("token");
+/// ```
 pub fn mask_input(name: &str) {
     if let Some(value) = raw(name).filter(|v| !v.is_empty()) {
         log::mask(value);
