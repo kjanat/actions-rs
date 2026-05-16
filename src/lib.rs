@@ -70,3 +70,10 @@ pub mod prelude {
     pub use crate::{debug, error, group, info, notice, warning};
     pub use crate::{env, input, log, output};
 }
+
+/// Compiles (and runs) every fenced example in `README.md` as a doctest.
+/// `#[cfg(doctest)]` so it exists only during `cargo test --doc` — zero
+/// effect on the published API.
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+struct ReadmeDoctests;

@@ -102,10 +102,6 @@ derive/codegen, tool cache, glob, command exec.
 use actions_rs::{Annotation, Cell, Summary, SummaryText, log, output};
 
 fn main() -> actions_rs::Result<()> {
-    if actions_rs::env::is_github_actions() {
-        log::info("running inside GitHub Actions");
-    }
-
     // Typed, validated input (env var `INPUT_VERBOSE`).
     let verbose = actions_rs::input::bool_input("verbose").unwrap_or(false);
 
@@ -122,19 +118,23 @@ fn main() -> actions_rs::Result<()> {
     // Group that closes even on panic; returns the closure's value.
     let n = actions_rs::group!("build", { 6 * 7 });
 
-    // Outputs / exported env.
-    output::set_output("answer", n)?;
-    output::export_var("BUILD_OK", true)?;
+    // Runner-only side effects: env files / step outputs only exist on a runner,
+    // and `export_var` has no stdout fallback (it errors off-runner by design),
+    // so gate them behind the runtime check.
+    if actions_rs::env::is_github_actions() {
+        log::info("running inside GitHub Actions");
+        output::set_output("answer", n)?;
+        output::export_var("BUILD_OK", true)?;
 
-    // Job summary.
-    let mut s = Summary::new();
-    s.heading("Result", 2)
-        .details(
-            "rendering",
-            SummaryText::html("<strong>raw HTML opt-in</strong>"),
-        )
-        .table([vec![Cell::header("answer"), Cell::new(n.to_string())]]);
-    s.write()?;
+        let mut s = Summary::new();
+        s.heading("Result", 2)
+            .details(
+                "rendering",
+                SummaryText::html("<strong>raw HTML opt-in</strong>"),
+            )
+            .table([vec![Cell::header("answer"), Cell::new(n.to_string())]]);
+        s.write()?;
+    }
     Ok(())
 }
 ```
