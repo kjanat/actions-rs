@@ -82,13 +82,16 @@ fn add_path_appends_bare_line() {
 #[test]
 fn missing_env_file_var_is_a_clean_fallback_not_an_error() {
     // With GITHUB_OUTPUT unset, set_output must not error: it falls back to
-    // the deprecated stdout command (printed to this process's stdout, which
-    // the harness captures and discards).
+    // the deprecated `::set-output::` stdout command. That goes to fd 1, which
+    // libtest does NOT capture, so under `cargo test` on a real runner GitHub
+    // would parse it and emit the set-output deprecation warning. Fence it
+    // with stop-commands so the runner ignores the emitted command.
     let _guard = ENV_LOCK
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     // SAFETY: serialised by ENV_LOCK.
     unsafe { std::env::remove_var("GITHUB_OUTPUT") };
+    let _stop = actions_rs::log::stop_commands();
     actions_rs::output::set_output("k", "v").expect("fallback must succeed");
 }
 

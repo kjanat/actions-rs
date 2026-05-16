@@ -5,6 +5,13 @@
 //! is unset (older runners, or running outside Actions). All values are taken
 //! as `impl Display`, so `&str`, `String`, integers and booleans all work
 //! without a serde dependency.
+//!
+//! The `::set-output::` / `::save-state::` fallbacks are deprecated by GitHub;
+//! see [Deprecating `save-state` and `set-output` commands][dep]. They are
+//! warned-but-not-yet-disabled and only emitted here when the environment
+//! file is unavailable.
+//!
+//! [dep]: https://github.blog/changelog/2022-10-11-github-actions-deprecating-save-state-and-set-output-commands/
 
 use std::fmt::Display;
 
@@ -25,6 +32,9 @@ pub fn set_output(name: &str, value: impl Display) -> Result<()> {
     let value = value.to_string();
     let msg = key_value_message(name, &value)?;
     if !issue_file_command("GITHUB_OUTPUT", &msg)? {
+        // Deprecated by GitHub (warned, not yet disabled); only reached when
+        // GITHUB_OUTPUT is unavailable:
+        // https://github.blog/changelog/2022-10-11-github-actions-deprecating-save-state-and-set-output-commands/
         WorkflowCommand::new("set-output")
             .property("name", name.to_owned())
             .message(value)
@@ -42,6 +52,9 @@ pub fn save_state(name: &str, value: impl Display) -> Result<()> {
     let value = value.to_string();
     let msg = key_value_message(name, &value)?;
     if !issue_file_command("GITHUB_STATE", &msg)? {
+        // Deprecated by GitHub (warned, not yet disabled); only reached when
+        // GITHUB_STATE is unavailable:
+        // https://github.blog/changelog/2022-10-11-github-actions-deprecating-save-state-and-set-output-commands/
         WorkflowCommand::new("save-state")
             .property("name", name.to_owned())
             .message(value)

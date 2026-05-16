@@ -59,17 +59,17 @@ impl Cell {
         }
     }
 
-    /// Set the column span.
+    /// Set the column span (clamped to ≥ 1; the HTML spec forbids 0).
     #[must_use]
     pub fn colspan(mut self, n: u32) -> Self {
-        self.colspan = n;
+        self.colspan = n.max(1);
         self
     }
 
-    /// Set the row span.
+    /// Set the row span (clamped to ≥ 1; the HTML spec forbids 0).
     #[must_use]
     pub fn rowspan(mut self, n: u32) -> Self {
-        self.rowspan = n;
+        self.rowspan = n.max(1);
         self
     }
 }
@@ -99,7 +99,14 @@ impl Summary {
         Self::default()
     }
 
-    /// Append raw text. When `eol` is true a newline is appended after it.
+    /// Append raw text **without HTML escaping**. When `eol` is true a
+    /// newline is appended after it.
+    ///
+    /// # Safety
+    /// This is the one builder method that does not escape `& < > "`. Passing
+    /// untrusted input here is an HTML-injection vector. Use it only for
+    /// trusted or already-escaped markup; for arbitrary text prefer
+    /// [`Summary::code_block`] / [`Summary::heading`] etc., which escape.
     pub fn raw(&mut self, text: impl AsRef<str>, eol: bool) -> &mut Self {
         self.buf.push_str(text.as_ref());
         if eol {
@@ -373,6 +380,16 @@ mod tests {
             "<table><tr><th colspan=\"1\" rowspan=\"1\">H1</th>\
              <th colspan=\"1\" rowspan=\"1\">H2</th></tr>\
              <tr><td colspan=\"2\" rowspan=\"1\">a</td></tr></table>\n"
+        );
+    }
+
+    #[test]
+    fn span_zero_is_clamped_to_one() {
+        let mut s = Summary::new();
+        s.table([vec![Cell::new("x").colspan(0).rowspan(0)]]);
+        assert_eq!(
+            s.stringify(),
+            "<table><tr><td colspan=\"1\" rowspan=\"1\">x</td></tr></table>\n"
         );
     }
 

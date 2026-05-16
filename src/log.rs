@@ -6,9 +6,15 @@
 //! operations live in [`crate::output`] and [`crate::summary`].
 
 use std::io::{self, Write};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::command::WorkflowCommand;
 use crate::env;
+
+/// Process-global failure flag, the Rust analogue of `@actions/core`'s
+/// `process.exitCode = ExitCode.Failure`. Set by [`set_failed`], read by
+/// [`exit_code`] / [`is_failed`].
+static FAILED: AtomicBool = AtomicBool::new(false);
 
 fn emit(cmd: &WorkflowCommand) {
     cmd.issue();
@@ -62,18 +68,53 @@ pub fn set_secret(value: impl Into<String>) {
 }
 
 /// Mark the action as failed: emit `message` as an `::error::` annotation and
-/// set the process exit code to `1`.
+/// set the process-global failure flag.
 ///
-/// Returns so the caller can `return` afterwards; the exit code is applied via
-/// [`std::process::exit`] only if you choose to exit. To match the common
-/// pattern this sets a process-global flag is **not** used — instead you
-/// should `std::process::exit(1)` yourself, or call [`fail_now`].
+/// This mirrors `@actions/core`'s `setFailed`, which sets
+/// `process.exitCode = 1` *without* exiting — the step runs to completion
+/// (allowing cleanup) and then fails. Rust has no settable deferred process
+/// exit code, so the deferred part is realised by returning [`exit_code`]
+/// from `main`:
+///
+/// ```no_run
+/// use std::process::ExitCode;
+/// fn main() -> ExitCode {
+///     ghactions_doctest();
+///     actions_rs::log::exit_code() // Failure iff set_failed was called
+/// }
+/// # fn ghactions_doctest() {}
+/// ```
+///
+/// For immediate termination instead, use [`fail_now`].
 pub fn set_failed(message: impl Into<String>) {
     error(message);
+    FAILED.store(true, Ordering::SeqCst);
+}
+
+/// Whether [`set_failed`] has been called in this process.
+#[must_use]
+pub fn is_failed() -> bool {
+    FAILED.load(Ordering::SeqCst)
+}
+
+/// The process exit code to return from `main`: [`ExitCode::FAILURE`] if
+/// [`set_failed`] was called, otherwise [`ExitCode::SUCCESS`]. This is the
+/// faithful analogue of `@actions/core`'s deferred `process.exitCode`.
+///
+/// [`ExitCode::FAILURE`]: std::process::ExitCode::FAILURE
+/// [`ExitCode::SUCCESS`]: std::process::ExitCode::SUCCESS
+#[must_use]
+pub fn exit_code() -> std::process::ExitCode {
+    if is_failed() {
+        std::process::ExitCode::FAILURE
+    } else {
+        std::process::ExitCode::SUCCESS
+    }
 }
 
 /// Emit `message` as an error annotation and immediately exit the process with
-/// code `1`. Convenience wrapper around [`set_failed`].
+/// code `1`. Convenience wrapper around [`set_failed`] that does not wait for
+/// `main` to return [`exit_code`].
 pub fn fail_now(message: impl Into<String>) -> ! {
     set_failed(message);
     std::process::exit(1)

@@ -223,13 +223,13 @@ impl Context {
     /// Path to the webhook payload JSON file.
     #[must_use]
     pub fn event_path(&self) -> Option<PathBuf> {
-        std::env::var_os(vars::GITHUB_EVENT_PATH).map(PathBuf::from)
+        var(vars::GITHUB_EVENT_PATH).map(PathBuf::from)
     }
 
     /// Workspace directory (checked-out repo root).
     #[must_use]
     pub fn workspace(&self) -> Option<PathBuf> {
-        std::env::var_os(vars::GITHUB_WORKSPACE).map(PathBuf::from)
+        var(vars::GITHUB_WORKSPACE).map(PathBuf::from)
     }
 
     /// Workflow name.
