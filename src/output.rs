@@ -240,28 +240,9 @@ mod tests {
         assert!(matches!(e, crate::Error::ReservedName(_)));
     }
 
-    #[test]
-    fn unavailable_file_commands_error() {
-        with_clean_overlay(|| {
-            let err = export_var("MY_FLAG", true).unwrap_err();
-            assert!(matches!(
-                err,
-                crate::Error::UnavailableFileCommand {
-                    var: "GITHUB_ENV",
-                    ..
-                }
-            ));
-
-            let err = add_path("/tmp/bin").unwrap_err();
-            assert!(matches!(
-                err,
-                crate::Error::UnavailableFileCommand {
-                    var: "GITHUB_PATH",
-                    ..
-                }
-            ));
-        });
-    }
+    // `unavailable_file_commands_error` lives in tests/env_files.rs: it must
+    // unset GITHUB_ENV/GITHUB_PATH (the CI runner sets them), which needs
+    // `unsafe` env mutation — impossible here under crate `forbid(unsafe_code)`.
 
     #[test]
     fn overlay_tracks_exported_path_changes() {

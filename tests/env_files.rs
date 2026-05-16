@@ -131,6 +131,53 @@ fn export_reserved_name_is_rejected() {
 }
 
 #[test]
+fn export_var_and_add_path_error_without_env_files() {
+    // The CI runner sets GITHUB_ENV/GITHUB_PATH for every step, so this must
+    // explicitly unset them to exercise the no-fallback error path.
+    let _guard = ENV_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let prev_env = std::env::var_os("GITHUB_ENV");
+    let prev_path = std::env::var_os("GITHUB_PATH");
+    // SAFETY: serialised by ENV_LOCK.
+    unsafe {
+        std::env::remove_var("GITHUB_ENV");
+        std::env::remove_var("GITHUB_PATH");
+    }
+
+    let env_result = actions_rs::output::export_var("MY_FLAG", true);
+    let path_result = actions_rs::output::add_path("/tmp/bin");
+
+    // Restore before asserting so a failed assertion can't leak state.
+    // SAFETY: serialised by ENV_LOCK.
+    unsafe {
+        match prev_env {
+            Some(v) => std::env::set_var("GITHUB_ENV", v),
+            None => std::env::remove_var("GITHUB_ENV"),
+        }
+        match prev_path {
+            Some(v) => std::env::set_var("GITHUB_PATH", v),
+            None => std::env::remove_var("GITHUB_PATH"),
+        }
+    }
+
+    assert!(matches!(
+        env_result.unwrap_err(),
+        actions_rs::Error::UnavailableFileCommand {
+            var: "GITHUB_ENV",
+            ..
+        }
+    ));
+    assert!(matches!(
+        path_result.unwrap_err(),
+        actions_rs::Error::UnavailableFileCommand {
+            var: "GITHUB_PATH",
+            ..
+        }
+    ));
+}
+
+#[test]
 fn required_input_accepts_whitespace_only_then_trims() {
     with_env_var("INPUT_FLAG", "   ", || {
         let value = actions_rs::input::input_required("flag").unwrap();
