@@ -5,20 +5,10 @@ on:
   pull_request:
   workflow_dispatch:
 
-permissions:
-  contents: read
-
-# `run:` is unavoidably a shell. Pin it to bash everywhere so it is never
-# the runner-default (which would be pwsh on Windows) — deterministic, and
-# every `run:` here is a single bare `cargo` command, no script logic.
-defaults:
-  run:
-    shell: bash
+permissions: { contents: read }
+defaults: { run: { shell: bash } }
 
 jobs:
-  # Pure-std crate: one runner is enough for the static gates. OS-sensitive
-  # behaviour (env-file newlines, the RandomState delimiter) is covered by the
-  # unit/integration tests, which run here.
   check:
     name: check
     runs-on: ubuntu-latest
@@ -31,8 +21,7 @@ jobs:
       - run: cargo test --doc
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo doc --no-deps
-        env:
-          RUSTDOCFLAGS: -D warnings
+        env: { RUSTDOCFLAGS: -D warnings }
 
   roundtrip:
     name: round-trip
