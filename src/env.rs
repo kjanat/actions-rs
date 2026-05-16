@@ -10,57 +10,132 @@ use std::path::PathBuf;
 ///
 /// Use these instead of stringly-typed literals to avoid typos.
 pub mod vars {
-    /// `"true"` when running inside GitHub Actions.
+    /// Always `"true"` while a step runs inside GitHub Actions; unset
+    /// otherwise. Set by the runner. Use it to no-op locally.
+    ///
+    /// Example: `true`
     pub const GITHUB_ACTIONS: &str = "GITHUB_ACTIONS";
-    /// `"true"` in any CI (set by Actions and most other CI systems).
+    /// `"true"` under Actions and virtually every other CI (Travis, Circle,
+    /// GitLab, …). Broader and less reliable than [`GITHUB_ACTIONS`].
+    ///
+    /// Example: `true`
     pub const CI: &str = "CI";
-    /// `"1"` when step-debug logging is enabled.
+    /// `"1"` when step-debug logging is enabled (the `ACTIONS_STEP_DEBUG`
+    /// secret is `true`, or the run was re-run with debug logging); otherwise
+    /// unset.
+    ///
+    /// Example: `1`
     pub const RUNNER_DEBUG: &str = "RUNNER_DEBUG";
-    /// Runner OS: `Linux`, `Windows` or `macOS`.
+    /// OS of the runner image. One of `Linux`, `Windows`, `macOS`. Derived
+    /// from the `runs-on` image.
+    ///
+    /// Example: `runs-on: ubuntu-latest` → `Linux`
     pub const RUNNER_OS: &str = "RUNNER_OS";
-    /// Runner CPU architecture: `X86`, `X64`, `ARM` or `ARM64`.
+    /// CPU architecture of the runner. One of `X86`, `X64`, `ARM`, `ARM64`.
+    ///
+    /// Example: `runs-on: ubuntu-latest` → `X64`
     pub const RUNNER_ARCH: &str = "RUNNER_ARCH";
-    /// Temp directory cleaned up after each job.
+    /// Per-job temporary directory, emptied at the end of each job. Platform
+    /// path set by the runner.
+    ///
+    /// Example: `/home/runner/work/_temp` (Linux hosted runner)
     pub const RUNNER_TEMP: &str = "RUNNER_TEMP";
-    /// Pre-installed tool cache directory.
+    /// Root of the pre-installed tool cache (Python, Node, …) on hosted
+    /// runners.
+    ///
+    /// Example: `/opt/hostedtoolcache` (Linux hosted runner)
     pub const RUNNER_TOOL_CACHE: &str = "RUNNER_TOOL_CACHE";
-    /// `owner/repo`.
+    /// `owner/repo` of the repository the workflow runs in.
+    ///
+    /// Example: `octocat/Hello-World`
     pub const GITHUB_REPOSITORY: &str = "GITHUB_REPOSITORY";
-    /// Repository owner login.
+    /// Login of the repository owner (the part before `/` in
+    /// [`GITHUB_REPOSITORY`]).
+    ///
+    /// Example: `octocat`
     pub const GITHUB_REPOSITORY_OWNER: &str = "GITHUB_REPOSITORY_OWNER";
-    /// Commit SHA that triggered the run.
+    /// Full 40-char commit SHA that triggered the run. For `pull_request`
+    /// events this is the PR's test-merge commit, not the PR head.
+    ///
+    /// Example: `ffac537e6cbbf934b08745a378932722df287a53`
     pub const GITHUB_SHA: &str = "GITHUB_SHA";
-    /// Full ref, e.g. `refs/heads/main`.
+    /// Full ref that triggered the run. Branch push → `refs/heads/<branch>`;
+    /// tag → `refs/tags/<tag>`; pull request → `refs/pull/<n>/merge`.
+    ///
+    /// Example: push to `main` → `refs/heads/main`
     pub const GITHUB_REF: &str = "GITHUB_REF";
-    /// Short ref name, e.g. `main`.
+    /// Short form of [`GITHUB_REF`] with the `refs/heads/` or `refs/tags/`
+    /// prefix stripped.
+    ///
+    /// Example: push to `main` → `main`; tag `v1.2.0` → `v1.2.0`;
+    /// PR #42 → `42/merge`
     pub const GITHUB_REF_NAME: &str = "GITHUB_REF_NAME";
-    /// `branch` or `tag`.
+    /// Kind of ref that triggered the run: `branch` or `tag`.
+    ///
+    /// Example: push to `main` → `branch`
     pub const GITHUB_REF_TYPE: &str = "GITHUB_REF_TYPE";
-    /// PR head ref (empty outside pull requests).
+    /// Source (head) branch of a pull request. Set **only** for
+    /// `pull_request` / `pull_request_target` events; empty/unset for `push`
+    /// and most other events.
+    ///
+    /// Example: PR from `feature/login` into `main` → `feature/login`
     pub const GITHUB_HEAD_REF: &str = "GITHUB_HEAD_REF";
-    /// PR base ref (empty outside pull requests).
+    /// Target (base) branch of a pull request. Set **only** for
+    /// `pull_request` / `pull_request_target` events; empty/unset otherwise.
+    ///
+    /// Example: PR from `feature/login` into `main` → `main`
     pub const GITHUB_BASE_REF: &str = "GITHUB_BASE_REF";
-    /// Event name that triggered the run, e.g. `push`.
+    /// Name of the webhook event that triggered the run.
+    ///
+    /// Example: `push`, `pull_request`, `workflow_dispatch`, `schedule`
     pub const GITHUB_EVENT_NAME: &str = "GITHUB_EVENT_NAME";
-    /// Path to the JSON file with the full webhook payload.
+    /// Filesystem path to the JSON file holding the full webhook event
+    /// payload (parse it yourself; this crate keeps it serde-free).
+    ///
+    /// Example: `/home/runner/work/_temp/_github_workflow/event.json`
     pub const GITHUB_EVENT_PATH: &str = "GITHUB_EVENT_PATH";
-    /// Workspace directory (checked-out repo root).
+    /// Working directory containing the checked-out repository (after
+    /// `actions/checkout`). Default cwd for `run:` steps.
+    ///
+    /// Example: `/home/runner/work/Hello-World/Hello-World`
     pub const GITHUB_WORKSPACE: &str = "GITHUB_WORKSPACE";
-    /// Workflow name.
+    /// `name:` of the running workflow, or its file path if `name:` is
+    /// omitted.
+    ///
+    /// Example: `CI` (or `.github/workflows/ci.yml` if unnamed)
     pub const GITHUB_WORKFLOW: &str = "GITHUB_WORKFLOW";
-    /// Job id of the current job.
+    /// The job's *id key* from the workflow YAML (the `jobs:` map key), not
+    /// the human `name:`.
+    ///
+    /// Example: `jobs: { build: … }` → `build`
     pub const GITHUB_JOB: &str = "GITHUB_JOB";
-    /// Unique numeric id of the run.
+    /// Unique id of the workflow run. Stable across re-runs of the same run;
+    /// usable to build a run URL.
+    ///
+    /// Example: `1658821493`
     pub const GITHUB_RUN_ID: &str = "GITHUB_RUN_ID";
-    /// Per-workflow incrementing run number.
+    /// Count of runs of *this workflow* in the repo, incremented per run.
+    /// Unlike [`GITHUB_RUN_ID`] it does **not** change on a re-run.
+    ///
+    /// Example: `42`
     pub const GITHUB_RUN_NUMBER: &str = "GITHUB_RUN_NUMBER";
-    /// Login of the user/app that triggered the run.
+    /// Login of the account that initiated the run (on a re-run, the original
+    /// initiator, not whoever clicked re-run).
+    ///
+    /// Example: `octocat`
     pub const GITHUB_ACTOR: &str = "GITHUB_ACTOR";
-    /// Server URL, e.g. `https://github.com`.
+    /// Base URL of the GitHub server — `https://github.com` on github.com,
+    /// the instance URL on GitHub Enterprise Server.
+    ///
+    /// Example: `https://github.com`
     pub const GITHUB_SERVER_URL: &str = "GITHUB_SERVER_URL";
-    /// REST API base URL.
+    /// REST API base URL (Enterprise-aware).
+    ///
+    /// Example: `https://api.github.com`
     pub const GITHUB_API_URL: &str = "GITHUB_API_URL";
-    /// GraphQL API URL.
+    /// GraphQL API endpoint (Enterprise-aware).
+    ///
+    /// Example: `https://api.github.com/graphql`
     pub const GITHUB_GRAPHQL_URL: &str = "GITHUB_GRAPHQL_URL";
 }
 
