@@ -1,8 +1,7 @@
 //! Runtime detection and typed access to the GitHub Actions environment.
 //!
-//! Nothing here mutates the process environment; every accessor is a cheap
-//! read of a `GITHUB_*` / `RUNNER_*` variable. The canonical names are also
-//! exposed as constants in [`vars`] for callers who want raw access.
+//! Nothing here mutates the process environment; every accessor is a cheap read of a `GITHUB_*` / `RUNNER_*` variable.\
+//! The canonical names are also exposed as constants in [`vars`] for callers who want raw access.
 
 use std::path::PathBuf;
 
@@ -10,24 +9,24 @@ use std::path::PathBuf;
 ///
 /// Use these instead of stringly-typed literals to avoid typos.
 pub mod vars {
-    /// Always `"true"` while a step runs inside GitHub Actions; unset
-    /// otherwise. Set by the runner. Use it to no-op locally.
+    /// Always `"true"` while a step runs inside GitHub Actions; unset otherwise.
+    /// Set by the runner. Use it to no-op locally.
     ///
     /// Example: `true`
     pub const GITHUB_ACTIONS: &str = "GITHUB_ACTIONS";
-    /// `"true"` under Actions and virtually every other CI (Travis, Circle,
-    /// GitLab, …). Broader and less reliable than [`GITHUB_ACTIONS`].
+    /// `"true"` under Actions and virtually every other CI (Travis, Circle, GitLab, …).
+    /// Broader and less reliable than [`GITHUB_ACTIONS`].
     ///
     /// Example: `true`
     pub const CI: &str = "CI";
-    /// `"1"` when step-debug logging is enabled (the `ACTIONS_STEP_DEBUG`
-    /// secret is `true`, or the run was re-run with debug logging); otherwise
-    /// unset.
+    /// `"1"` when step-debug logging is enabled; otherwise unset.
+    ///
+    /// logging is enabled when the `ACTIONS_STEP_DEBUG` secret is `true`,
+    /// or the run was re-run with debug logging
     ///
     /// Example: `1`
     pub const RUNNER_DEBUG: &str = "RUNNER_DEBUG";
-    /// OS of the runner image. One of `Linux`, `Windows`, `macOS`. Derived
-    /// from the `runs-on` image.
+    /// OS of the runner image. One of `Linux`, `Windows`, `macOS`. Derived from the `runs-on` image.
     ///
     /// Example: `runs-on: ubuntu-latest` → `Linux`
     pub const RUNNER_OS: &str = "RUNNER_OS";
@@ -35,13 +34,12 @@ pub mod vars {
     ///
     /// Example: `runs-on: ubuntu-latest` → `X64`
     pub const RUNNER_ARCH: &str = "RUNNER_ARCH";
-    /// Per-job temporary directory, emptied at the end of each job. Platform
-    /// path set by the runner.
+    /// Per-job temporary directory, emptied at the end of each job.
+    /// Platform path set by the runner.
     ///
     /// Example: `/home/runner/work/_temp` (Linux hosted runner)
     pub const RUNNER_TEMP: &str = "RUNNER_TEMP";
-    /// Root of the pre-installed tool cache (Python, Node, …) on hosted
-    /// runners.
+    /// Root of the pre-installed tool cache (Python, Node, …) on hosted runners.
     ///
     /// Example: `/opt/hostedtoolcache` (Linux hosted runner)
     pub const RUNNER_TOOL_CACHE: &str = "RUNNER_TOOL_CACHE";
@@ -49,8 +47,7 @@ pub mod vars {
     ///
     /// Example: `octocat/Hello-World`
     pub const GITHUB_REPOSITORY: &str = "GITHUB_REPOSITORY";
-    /// Login of the repository owner (the part before `/` in
-    /// [`GITHUB_REPOSITORY`]).
+    /// Login of the repository owner (the part before `/` in [`GITHUB_REPOSITORY`]).
     ///
     /// Example: `octocat`
     pub const GITHUB_REPOSITORY_OWNER: &str = "GITHUB_REPOSITORY_OWNER";

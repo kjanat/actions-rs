@@ -1,9 +1,9 @@
 //! Annotation builder for `notice` / `warning` / `error` commands.
 //!
-//! Annotations may carry a source location (file + line/column range) and a
-//! title; GitHub renders them inline in the diff and in the run summary. The
-//! property names emitted here match `@actions/core`'s mapping: its public
-//! `startLine`/`startColumn` become the wire properties `line`/`col`.
+//! Annotations may carry a source location (file + line/column range) and a title;
+//! GitHub renders them inline in the diff and in the run summary.\
+//! The property names emitted here match `@actions/core`'s mapping: its public `startLine`/`startColumn`
+//! become the wire properties `line`/`col`.
 
 use crate::command::WorkflowCommand;
 
@@ -14,8 +14,8 @@ pub enum AnnotationKind {
     Notice,
     /// A `::warning::` annotation (does not fail the job).
     Warning,
-    /// An `::error::` annotation (does not by itself fail the job; pair with a
-    /// non-zero exit code or [`crate::log::set_failed`]).
+    /// An `::error::` annotation (does not by itself fail the job;
+    /// pair with a non-zero exit code or [`crate::log::set_failed`]).
     Error,
 }
 
@@ -39,8 +39,8 @@ pub enum AnnotationSpan {
         /// The optional 1-based end line.
         end: Option<u32>,
     },
-    /// A same-line column span. When `end` is omitted GitHub treats the span as
-    /// a single column.
+    /// A same-line column span.
+    /// When `end` is omitted GitHub treats the span as a single column.
     Column {
         /// The 1-based line.
         line: u32,
@@ -53,9 +53,8 @@ pub enum AnnotationSpan {
 
 /// Fluent builder for a located annotation.
 ///
-/// All fields are optional — an empty `Annotation` simply produces a plain
-/// annotation with no location. Build it, then emit with [`Annotation::notice`],
-/// [`Annotation::warning`] or [`Annotation::error`].
+/// All fields are optional — an empty `Annotation` simply produces a plain annotation with no location.
+/// Build it, then emit with [`Annotation::notice`], [`Annotation::warning`] or [`Annotation::error`].
 ///
 /// ```
 /// use actions_rs::Annotation;
@@ -129,8 +128,7 @@ impl Annotation {
         self
     }
 
-    /// Replace the current location fields with a span that is valid by
-    /// construction.
+    /// Replace the current location fields with a span that is valid by construction.
     #[must_use]
     pub fn span(mut self, span: AnnotationSpan) -> Self {
         match span {
@@ -150,11 +148,10 @@ impl Annotation {
         self
     }
 
-    /// Build the [`WorkflowCommand`] for this annotation and `message` without
-    /// emitting it. Useful for testing or custom sinks.
+    /// Build the [`WorkflowCommand`] for this annotation and `message` without emitting it.
+    /// Useful for testing or custom sinks.
     ///
-    /// Property order matches `@actions/core`:
-    /// `title, file, line, endLine, col, endColumn`.
+    /// Property order matches `@actions/core`: `title, file, line, endLine, col, endColumn`.
     #[must_use]
     pub fn command(&self, kind: AnnotationKind, message: impl Into<String>) -> WorkflowCommand {
         let line = self.line;

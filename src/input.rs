@@ -1,12 +1,11 @@
 //! Typed access to action inputs.
 //!
-//! An action input named `foo-bar` is passed to the process as the environment
-//! variable `INPUT_FOO-BAR`: the rule is `INPUT_` + uppercased name with
-//! spaces replaced by underscores (hyphens are **kept**). This matches
-//! `@actions/core`'s `getInput`.
+//! An action input named `foo-bar` is passed to the process as the environment variable `INPUT_FOO-BAR`:
+//! the rule is `INPUT_` + uppercased name with spaces replaced by underscores (hyphens are **kept**).
+//! This matches `@actions/core`'s `getInput`.
 //!
-//! The name→key transform and the strict boolean parser are pure functions so
-//! they are unit-tested without mutating the global environment.
+//! The `name → key` transform and the strict boolean parser are pure functions so they are
+//! unit-tested without mutating the global environment.
 
 use std::fmt::Display;
 use std::str::FromStr;
@@ -47,10 +46,9 @@ fn raw(name: &str) -> Option<String> {
 /// Read an input with explicit [`InputOptions`].
 ///
 /// # Errors
-/// [`Error::MissingRequiredInput`] when `options.required` and the **raw**
-/// input is absent or empty. The required check runs *before* trimming
-/// (matching `@actions/core`): a whitespace-only required input passes the
-/// check and then trims to `""`.
+/// [`Error::MissingRequiredInput`] when `options.required` and the **raw** input is absent or empty.\
+/// The required check runs *before* trimming (matching `@actions/core`): a whitespace-only required
+/// input passes the check and then trims to `""`.
 pub fn input_with(name: &str, options: InputOptions) -> Result<String> {
     let value = raw(name).unwrap_or_default();
     if options.required && value.is_empty() {
@@ -66,8 +64,7 @@ pub fn input_with(name: &str, options: InputOptions) -> Result<String> {
 
 /// Read an optional input, trimmed. Returns `""` when unset.
 ///
-/// An action input `foo-bar` arrives as the env var `INPUT_FOO-BAR`
-/// (uppercased, spaces → `_`, hyphens kept).
+/// An action input `foo-bar` arrives as the env var `INPUT_FOO-BAR` (uppercased, spaces → `_`, hyphens kept).
 ///
 /// # Examples
 ///
@@ -111,8 +108,7 @@ fn parse_bool(name: &str, value: &str) -> Result<bool> {
 /// (`true|True|TRUE|false|False|FALSE`).
 ///
 /// # Errors
-/// [`Error::InvalidBool`] for any other value, including absent/empty
-/// (matching `@actions/core`'s `getBooleanInput`).
+/// [`Error::InvalidBool`] for any other value, including absent/empty (matching `@actions/core`'s `getBooleanInput`).
 ///
 /// # Examples
 ///
@@ -134,19 +130,18 @@ pub fn bool_input(name: &str) -> Result<bool> {
     parse_bool(name, &value)
 }
 
-/// Split a multiline input on `\n`, dropping empty lines. Each retained line
-/// is trimmed.
+/// Split a multiline input on `\n`, dropping empty lines.
+/// Each retained line is trimmed.
 #[must_use]
 pub fn multiline_input(name: &str) -> Vec<String> {
     multiline_input_with(name, InputOptions::default()).unwrap_or_default()
 }
 
-/// Read a multiline input with explicit [`InputOptions`]. Empty raw lines are
-/// dropped before optional trimming, matching `@actions/core`.
+/// Read a multiline input with explicit [`InputOptions`].
+/// Empty raw lines are dropped before optional trimming, matching `@actions/core`.
 ///
 /// # Errors
-/// [`Error::MissingRequiredInput`] when `options.required` and the input is
-/// absent or empty.
+/// [`Error::MissingRequiredInput`] when `options.required` and the input is absent or empty.
 pub fn multiline_input_with(name: &str, options: InputOptions) -> Result<Vec<String>> {
     let value = input_with(
         name,
@@ -173,8 +168,7 @@ fn split_multiline(value: &str, trim: bool) -> Vec<String> {
 /// Read an input and parse it via [`FromStr`].
 ///
 /// # Errors
-/// [`Error::ParseInput`] if parsing fails (the type's `FromStr::Err` is
-/// rendered via [`Display`]).
+/// [`Error::ParseInput`] if parsing fails (the type's `FromStr::Err` is rendered via [`Display`]).
 ///
 /// # Examples
 ///

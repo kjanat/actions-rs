@@ -35,6 +35,7 @@
 	"languages": {
 		"TOML": {
 			"language_servers": ["tombi", "..."]
-		}
+		},
+		"Rust": { "wrap_guides": [100] }
 	}
 }

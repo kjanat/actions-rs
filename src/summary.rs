@@ -1,13 +1,11 @@
 //! Fluent builder for the job summary (`GITHUB_STEP_SUMMARY`).
 //!
-//! The summary is GitHub-Flavored Markdown with embedded HTML. Buffer
-//! construction is pure (testable via [`Summary::stringify`]); only
-//! [`Summary::write`] / [`Summary::write_overwrite`] touch the filesystem and
-//! can fail.
+//! The summary is GitHub-Flavored Markdown with embedded HTML.\
+//! Buffer construction is pure (testable via [`Summary::stringify`]);
+//! only [`Summary::write`] / [`Summary::write_overwrite`] touch the filesystem and can fail.
 //!
-//! Text node content is escaped by default. Use [`SummaryText::html`] or
-//! [`Summary::raw`] when you intentionally want raw HTML parity with
-//! `@actions/core`.
+//! Text node content is escaped by default.\
+//! Use [`SummaryText::html`] or [`Summary::raw`] when you intentionally want raw HTML parity with `@actions/core`.
 
 use std::fmt::Write as _;
 use std::fs::OpenOptions;
@@ -19,8 +17,8 @@ use crate::error::{Error, Result};
 /// GitHub's documented per-step summary size limit (1 MiB).
 const MAX_BYTES: usize = 1024 * 1024;
 
-/// Escape text destined for HTML element content. Without this, content like
-/// `DEMO_FLAG<<delim` is parsed by the browser as a bogus tag and truncated.
+/// Escape text destined for HTML element content.
+/// Without this, content like `DEMO_FLAG<<delim` is parsed by the browser as a bogus tag and truncated.
 fn esc_text(s: &str) -> String {
     s.replace('&', "&amp;")
         .replace('<', "&lt;")
@@ -80,9 +78,9 @@ impl From<String> for SummaryText {
     }
 }
 
-/// A table cell. Use [`Cell::header`] for `<th>`; `colspan`/`rowspan` map to
-/// the matching HTML attributes. Cell content is escaped unless you pass
-/// [`SummaryText::html`].
+/// A table cell.
+/// Use [`Cell::header`] for `<th>`; `colspan`/`rowspan` map to the matching HTML attributes.
+/// Cell content is escaped unless you pass [`SummaryText::html`].
 #[derive(Debug, Clone)]
 pub struct Cell {
     data: SummaryText,
@@ -145,11 +143,10 @@ impl From<SummaryText> for Cell {
     }
 }
 
-/// Accumulating job-summary builder. Chain the builder methods, then
-/// [`write`](Summary::write) (append) or
-/// [`write_overwrite`](Summary::write_overwrite). Building is pure and
-/// inspectable via [`stringify`](Summary::stringify); only the `write*`
-/// methods touch `GITHUB_STEP_SUMMARY`.
+/// Accumulating job-summary builder.
+/// Chain the builder methods, then [`write`](Summary::write) (append) or [`write_overwrite`](Summary::write_overwrite).
+/// Building is pure and inspectable via [`stringify`](Summary::stringify);
+/// only the `write*` methods touch `GITHUB_STEP_SUMMARY`.
 ///
 /// # Examples
 ///
@@ -180,14 +177,14 @@ impl Summary {
         Self::default()
     }
 
-    /// Append raw text **without HTML escaping**. When `eol` is true a
-    /// newline is appended after it.
+    /// Append raw text **without HTML escaping**.
+    /// When `eol` is true a newline is appended after it.
     ///
     /// # Safety
-    /// This is the one builder method that does not escape `& < > "`. Passing
-    /// untrusted input here is an HTML-injection vector. Use it only for
-    /// trusted or already-escaped markup; for arbitrary text prefer
-    /// [`Summary::code_block`] / [`Summary::heading`] etc., which escape.
+    /// This is the one builder method that does not escape `& < > "`.
+    /// Passing untrusted input here is an HTML-injection vector.
+    /// Use it only for trusted or already-escaped markup;
+    /// for arbitrary text prefer [`Summary::code_block`] / [`Summary::heading`] etc., which escape.
     pub fn raw(&mut self, text: impl AsRef<str>, eol: bool) -> &mut Self {
         self.buf.push_str(text.as_ref());
         if eol {
@@ -202,8 +199,8 @@ impl Summary {
         self
     }
 
-    /// Append an `<h1>`–`<h6>` heading (`level` clamped to 1..=6`). Text is
-    /// escaped unless you pass [`SummaryText::html`].
+    /// Append an `<h1>`–`<h6>` heading (`level` clamped to 1..=6`).
+    /// Text is escaped unless you pass [`SummaryText::html`].
     pub fn heading(&mut self, text: impl Into<SummaryText>, level: u8) -> &mut Self {
         let l = level.clamp(1, 6);
         let text = text.into().into_html();
@@ -246,7 +243,8 @@ impl Summary {
         self
     }
 
-    /// Append a `<table>`. Each row is a list of [`Cell`]s.
+    /// Append a `<table>`.
+    /// Each row is a list of [`Cell`]s.
     pub fn table(&mut self, rows: impl IntoIterator<Item = Vec<Cell>>) -> &mut Self {
         self.buf.push_str("<table>");
         for row in rows {
@@ -267,8 +265,8 @@ impl Summary {
         self
     }
 
-    /// Append a `<details>` block with a `<summary>` label. Both text nodes are
-    /// escaped unless you pass [`SummaryText::html`].
+    /// Append a `<details>` block with a `<summary>` label.
+    /// Both text nodes are escaped unless you pass [`SummaryText::html`].
     pub fn details(
         &mut self,
         label: impl Into<SummaryText>,
@@ -284,7 +282,8 @@ impl Summary {
         self
     }
 
-    /// Append an `<img>`. `size` is an optional `(width, height)` in pixels.
+    /// Append an `<img>`.
+    /// `size` is an optional `(width, height)` in pixels.
     pub fn image(
         &mut self,
         src: impl AsRef<str>,
@@ -303,8 +302,9 @@ impl Summary {
         self
     }
 
-    /// Append an `<a>` link. The link text is escaped unless you pass
-    /// [`SummaryText::html`]; `href` is always attribute-escaped.
+    /// Append an `<a>` link.
+    /// The link text is escaped unless you pass [`SummaryText::html`];
+    /// `href` is always attribute-escaped.
     pub fn link(&mut self, text: impl Into<SummaryText>, href: impl AsRef<str>) -> &mut Self {
         let text = text.into().into_html();
         let _ = writeln!(
@@ -316,8 +316,8 @@ impl Summary {
         self
     }
 
-    /// Append a `<blockquote>` with an optional `cite` URL. Quote text is
-    /// escaped unless you pass [`SummaryText::html`].
+    /// Append a `<blockquote>` with an optional `cite` URL.
+    /// Quote text is escaped unless you pass [`SummaryText::html`].
     pub fn quote(&mut self, text: impl Into<SummaryText>, cite: Option<&str>) -> &mut Self {
         let text = text.into().into_html();
         match cite {

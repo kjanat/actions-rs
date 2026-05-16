@@ -1,11 +1,10 @@
 //! Percent-encoding for GitHub Actions workflow commands.
 //!
-//! The runner parses lines of the form `::cmd key=val,key=val::data`. To keep
-//! that grammar unambiguous certain characters must be percent-encoded. The
-//! rules below are taken verbatim from `@actions/core`
-//! (`packages/core/src/command.ts`) and the official workflow-commands
-//! documentation. **Order matters**: `%` must be encoded first so the escape
-//! sequences introduced by later replacements are not double-encoded.
+//! The runner parses lines of the form `::cmd key=val,key=val::data`.
+//! To keep that grammar unambiguous certain characters must be percent-encoded.
+//! The rules below are taken verbatim from `@actions/core` (`packages/core/src/command.ts`) and the
+//! official workflow-commands documentation.\
+//! **Order matters**: `%` must be encoded first so the escape sequences introduced by later replacements are not double-encoded.
 
 /// Encode a command *data* segment (the message after `::`).
 ///
@@ -18,8 +17,8 @@ pub(crate) fn escape_data(s: &str) -> String {
 
 /// Encode a command *property* value (e.g. `file=`, `title=`).
 ///
-/// Everything [`escape_data`] does, plus `:` → `%3A` and `,` → `%2C` so the
-/// `key=value` / comma-separated property grammar stays parseable.
+/// Everything [`escape_data`] does, plus `:` → `%3A` and `,` → `%2C` so the `key=value` / comma-separated
+/// property grammar stays parseable.
 pub(crate) fn escape_property(s: &str) -> String {
     s.replace('%', "%25")
         .replace('\r', "%0D")

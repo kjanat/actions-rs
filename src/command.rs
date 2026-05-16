@@ -1,9 +1,8 @@
 //! Low-level workflow-command construction and emission.
 //!
-//! Most users want the ergonomic helpers in [`crate::log`] /
-//! [`crate::annotation`]. This module exposes the underlying
-//! [`WorkflowCommand`] for power users who need to emit a command the
-//! higher-level API does not cover.
+//! Most users want the ergonomic helpers in [`crate::log`] / [`crate::annotation`].\
+//! This module exposes the underlying [`WorkflowCommand`] for power users who need to emit a command
+//! the higher-level API does not cover.
 
 use std::fmt;
 use std::io::{self, Write};
@@ -13,9 +12,9 @@ use crate::escape::{escape_data, escape_property};
 /// A single GitHub Actions workflow command: `::name key=val,...::message`.
 ///
 /// Properties are kept in insertion order to produce deterministic output
-/// (which the test-suite and `@actions/core` both rely on). The [`Display`]
-/// implementation performs all required percent-encoding, so the rendered
-/// string is always safe to write to stdout.
+/// (which the test-suite and `@actions/core` both rely on).\
+/// The [`Display`] implementation performs all required percent-encoding, so the rendered string is
+/// always safe to write to stdout.
 ///
 /// [`Display`]: std::fmt::Display
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -43,7 +42,8 @@ impl WorkflowCommand {
         self
     }
 
-    /// Append a property. The value is percent-encoded on render.
+    /// Append a property.
+    /// The value is percent-encoded on render.
     #[must_use]
     pub fn property(mut self, key: &'static str, value: impl Into<String>) -> Self {
         self.properties.push((key, value.into()));
@@ -61,8 +61,7 @@ impl WorkflowCommand {
 
     /// Render and write this command followed by a newline to `w`.
     ///
-    /// Used by the test-suite to capture output; the convenience helpers use
-    /// [`WorkflowCommand::issue`].
+    /// Used by the test-suite to capture output; the convenience helpers use [`WorkflowCommand::issue`].
     ///
     /// # Errors
     /// Propagates any write error from `w`.
@@ -72,9 +71,9 @@ impl WorkflowCommand {
 
     /// Render and write this command to stdout followed by a newline.
     ///
-    /// Stdout is the runner's command channel; a failed write here cannot be
-    /// meaningfully recovered from inside an action, so the result is dropped
-    /// deliberately (matching `@actions/core` behaviour).
+    /// Stdout is the runner's command channel;
+    /// a failed write here cannot be meaningfully recovered from inside an action,
+    /// so the result is dropped deliberately (matching `@actions/core` behaviour).
     pub fn issue(&self) {
         let _ = self.issue_to(io::stdout().lock());
     }

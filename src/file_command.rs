@@ -1,16 +1,16 @@
 //! Internal: environment-file ("file command") plumbing.
 //!
-//! Modern GitHub runners expose `GITHUB_ENV`, `GITHUB_OUTPUT`, `GITHUB_STATE`
-//! and `GITHUB_PATH` as paths to append-only files. We always serialise
-//! key/value pairs using the heredoc form `KEY<<DELIM\nVALUE\nDELIM` (the same
-//! choice `@actions/core` makes) because it is the only form that safely
-//! survives newlines in the value.
+//! Modern GitHub runners expose `GITHUB_ENV`, `GITHUB_OUTPUT`, `GITHUB_STATE` and `GITHUB_PATH` as
+//! paths to append-only files.\
+//! We always serialise key/value pairs using the heredoc form `KEY<<DELIM\nVALUE\nDELIM`\
+//! (the same choice `@actions/core` makes) because it is the only form that safely survives newlines in the value.
 //!
-//! The delimiter must not appear in the key or value, otherwise a crafted
-//! value could inject arbitrary variables (the class of bug behind
-//! CVE-2020-15228). We generate a per-call random delimiter with **zero
-//! dependencies** and still validate, returning [`Error::DelimiterCollision`]
-//! on the (astronomically unlikely) clash.
+//! The delimiter must not appear in the key or value, otherwise a crafted value could inject
+//! arbitrary variables (the class of bug behind [CVE-2020-15228]).\
+//! We generate a per-call random delimiter with **zero dependencies** and still validate,
+//! returning [`Error::DelimiterCollision`] on the (astronomically unlikely) clash.
+//!
+//! [CVE-2020-15228]: https://nvd.nist.gov/vuln/detail/cve-2020-15228
 
 use std::collections::hash_map::RandomState;
 use std::fs::OpenOptions;
@@ -25,10 +25,9 @@ use crate::error::{Error, Result};
 
 /// Produce a random, per-call heredoc delimiter without any external crate.
 ///
-/// Entropy sources: a process-wide [`RandomState`] (std seeds it from the OS
-/// CSPRNG once per process), mixed with a monotonic counter, the PID and the
-/// wall-clock nanoseconds. Far more than enough to make a same-process
-/// collision negligible while remaining `#![forbid(unsafe_code)]`-clean.
+/// Entropy sources: a process-wide [`RandomState`] (std seeds it from the OS CSPRNG once per process),
+/// mixed with a monotonic counter, the PID and the wall-clock nanoseconds.\
+/// Far more than enough to make a same-process collision negligible while remaining `#![forbid(unsafe_code)]`-clean.
 fn random_hex() -> String {
     static SEED: OnceLock<RandomState> = OnceLock::new();
     static COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -50,16 +49,14 @@ fn delimiter() -> String {
 
 /// A random, unguessable single-word token for `stop-commands` / resume.
 ///
-/// Unguessable so untrusted log content cannot emit the resume command itself
-/// and re-enable command processing early.
+/// Unguessable so untrusted log content cannot emit the resume command itself and re-enable command processing early.
 pub(crate) fn random_token() -> String {
     format!("stopcommands_{}", random_hex())
 }
 
 /// Build a heredoc key/value message for a fixed delimiter.
 ///
-/// Split out from [`key_value_message`] so the formatting and the
-/// collision-detection logic can be unit-tested deterministically.
+/// Split out from [`key_value_message`] so the formatting and the collision-detection logic can be unit-tested deterministically.
 fn key_value_message_with(key: &str, value: &str, delim: &str) -> Result<String> {
     // A `\r`/`\n` in the key breaks the `KEY<<DELIM` line and could inject
     // extra env-file entries. The value may contain newlines (that is the
@@ -81,13 +78,11 @@ pub(crate) fn key_value_message(key: &str, value: &str) -> Result<String> {
     key_value_message_with(key, value, &delimiter())
 }
 
-/// Append `line` (plus a trailing newline) to the file pointed at by env
-/// variable `var`.
+/// Append `line` (plus a trailing newline) to the file pointed at by env variable `var`.
 ///
-/// Returns `Ok(false)` when `var` is unset, signalling the caller to fall back
-/// to the deprecated stdout command. Returns [`Error::MissingEnvFile`] when
-/// `var` is set but the file does not exist (a broken runner state we refuse
-/// to paper over).
+/// Returns `Ok(false)` when `var` is unset, signalling the caller to fall back to the deprecated stdout command.
+/// Returns [`Error::MissingEnvFile`] when `var` is set but the file does not exist
+/// (a broken runner state we refuse to paper over).
 pub(crate) fn issue_file_command(var: &'static str, line: &str) -> Result<bool> {
     let Some(path) = std::env::var_os(var) else {
         return Ok(false);

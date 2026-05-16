@@ -1,8 +1,6 @@
-//! Error type for fallible operations (environment-file writes, typed input
-//! parsing, oversized job summaries).
+//! Error type for fallible operations (environment-file writes, typed input parsing, oversized job summaries).
 //!
-//! Pure stdout workflow commands (annotations, groups, masking) never return
-//! an error — see the [`crate::log`] module.
+//! Pure stdout workflow commands (annotations, groups, masking) never return an error — see the [`crate::log`] module.
 
 use std::fmt;
 use std::path::PathBuf;
