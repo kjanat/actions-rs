@@ -63,6 +63,15 @@ pub enum Error {
         /// The size of the buffer that was rejected, in bytes.
         bytes: usize,
     },
+    /// A key or path contained a carriage return or line feed, which would
+    /// corrupt the line-oriented environment-file syntax (and could inject
+    /// extra entries). Rejected before anything is written.
+    InvalidName {
+        /// The offending value.
+        name: String,
+        /// Why it was rejected.
+        reason: &'static str,
+    },
 }
 
 impl fmt::Display for Error {
@@ -97,6 +106,9 @@ impl fmt::Display for Error {
                 f,
                 "job summary is {bytes} bytes, exceeding the 1 MiB per-step limit"
             ),
+            Error::InvalidName { name, reason } => {
+                write!(f, "invalid name {name:?}: {reason}")
+            }
         }
     }
 }

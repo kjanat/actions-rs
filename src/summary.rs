@@ -353,8 +353,9 @@ impl Summary {
         }
         let Some(path) = std::env::var_os("GITHUB_STEP_SUMMARY") else {
             // Not in Actions / summaries disabled: nothing to write to. This
-            // is a normal local-run condition, not an error.
-            self.clear();
+            // is a normal local-run condition, not an error — but the buffer
+            // is *kept* (no write happened, so draining it would lose data
+            // silently). The caller can still `stringify()` or retry.
             return Ok(());
         };
         let existing_bytes = if append {

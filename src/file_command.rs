@@ -61,6 +61,15 @@ pub(crate) fn random_token() -> String {
 /// Split out from [`key_value_message`] so the formatting and the
 /// collision-detection logic can be unit-tested deterministically.
 fn key_value_message_with(key: &str, value: &str, delim: &str) -> Result<String> {
+    // A `\r`/`\n` in the key breaks the `KEY<<DELIM` line and could inject
+    // extra env-file entries. The value may contain newlines (that is the
+    // point of the heredoc), so only the key is checked here.
+    if key.contains(['\r', '\n']) {
+        return Err(Error::InvalidName {
+            name: key.to_owned(),
+            reason: "key contains a carriage return or line feed",
+        });
+    }
     if key.contains(delim) || value.contains(delim) {
         return Err(Error::DelimiterCollision);
     }
@@ -100,6 +109,19 @@ mod tests {
     fn heredoc_shape() {
         let msg = key_value_message_with("NAME", "multi\nline", "D").unwrap();
         assert_eq!(msg, "NAME<<D\nmulti\nline\nD");
+    }
+
+    #[test]
+    fn key_with_line_break_is_rejected() {
+        for bad in ["a\nb", "a\rb", "x\r\ny"] {
+            let err = key_value_message_with(bad, "v", "D").unwrap_err();
+            assert!(
+                matches!(err, Error::InvalidName { .. }),
+                "{bad:?} should be rejected"
+            );
+        }
+        // A newline in the *value* is fine — that is what the heredoc is for.
+        assert!(key_value_message_with("K", "line1\nline2", "D").is_ok());
     }
 
     #[test]

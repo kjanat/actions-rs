@@ -47,8 +47,10 @@ fn raw(name: &str) -> Option<String> {
 /// Read an input with explicit [`InputOptions`].
 ///
 /// # Errors
-/// [`Error::MissingRequiredInput`] when `options.required` and the input is
-/// absent or (after optional trimming) empty.
+/// [`Error::MissingRequiredInput`] when `options.required` and the **raw**
+/// input is absent or empty. The required check runs *before* trimming
+/// (matching `@actions/core`): a whitespace-only required input passes the
+/// check and then trims to `""`.
 pub fn input_with(name: &str, options: InputOptions) -> Result<String> {
     let value = raw(name).unwrap_or_default();
     if options.required && value.is_empty() {

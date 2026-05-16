@@ -194,6 +194,14 @@ pub fn export_var(name: &str, value: impl Display) -> Result<()> {
 /// otherwise on a file-command write failure.
 pub fn add_path(dir: impl Display) -> Result<()> {
     let dir = dir.to_string();
+    // GITHUB_PATH is one directory per line; a `\r`/`\n` would inject extra
+    // PATH entries.
+    if dir.contains(['\r', '\n']) {
+        return Err(crate::Error::InvalidName {
+            name: dir,
+            reason: "path contains a carriage return or line feed",
+        });
+    }
     if !issue_file_command("GITHUB_PATH", &dir)? {
         return Err(crate::Error::UnavailableFileCommand {
             var: "GITHUB_PATH",
@@ -238,6 +246,15 @@ mod tests {
     fn export_reserved_errs_without_touching_env() {
         let e = export_var("GITHUB_TOKEN", "x").unwrap_err();
         assert!(matches!(e, crate::Error::ReservedName(_)));
+    }
+
+    #[test]
+    fn add_path_rejects_line_breaks_before_touching_env() {
+        // Validation happens before any file command, so this needs no env.
+        for bad in ["/a\n/b", "/a\r/b"] {
+            let e = add_path(bad).unwrap_err();
+            assert!(matches!(e, crate::Error::InvalidName { .. }), "{bad:?}");
+        }
     }
 
     // `unavailable_file_commands_error` lives in tests/env_files.rs: it must

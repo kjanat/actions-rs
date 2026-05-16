@@ -25,12 +25,20 @@ fn with_env_file(var: &str, f: impl FnOnce(&Path)) {
     ));
     std::fs::write(&path, b"").expect("create temp env file");
 
+    let prev = std::env::var_os(var);
     // SAFETY: serialised by ENV_LOCK; no other thread reads/writes env here.
     unsafe { std::env::set_var(var, &path) };
 
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(&path)));
 
-    unsafe { std::env::remove_var(var) };
+    // SAFETY: serialised by ENV_LOCK. Restore the runner's prior value rather
+    // than blindly removing it, so later tests/steps are not perturbed.
+    unsafe {
+        match prev {
+            Some(v) => std::env::set_var(var, v),
+            None => std::env::remove_var(var),
+        }
+    }
     let _ = std::fs::remove_file(&path);
 
     if let Err(payload) = result {
@@ -42,11 +50,18 @@ fn with_env_var(var: &str, value: &str, f: impl FnOnce()) {
     let _guard = ENV_LOCK
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let prev = std::env::var_os(var);
     unsafe { std::env::set_var(var, value) };
 
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f));
 
-    unsafe { std::env::remove_var(var) };
+    // SAFETY: serialised by ENV_LOCK. Restore prior value, don't just remove.
+    unsafe {
+        match prev {
+            Some(v) => std::env::set_var(var, v),
+            None => std::env::remove_var(var),
+        }
+    }
 
     if let Err(payload) = result {
         std::panic::resume_unwind(payload);
