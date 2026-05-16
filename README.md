@@ -4,8 +4,10 @@
 
 A **zero-dependency**, `#![forbid(unsafe_code)]` Rust toolkit for talking to
 the GitHub Actions runner from a binary/Docker action or any CI step.\
-It speaks the *workflow-command* and *environment-file* protocols
-(the Rust analogue of [`@actions/core`]).
+It speaks the *workflow-command* and *environment-file* protocols — an
+independent, unofficial Rust port of [`@actions/core`] (faithful API and
+semantics, with [deliberate safety-first departures](#differences-from-actionscore)).\
+Not affiliated with or endorsed by GitHub or the `@actions/toolkit` project.
 
 ## What it's for (and the one thing it does best)
 
@@ -60,6 +62,37 @@ Around that it provides the rest of the toolkit surface:
   `set_output` / `save_state` keep deprecated stdout fallbacks where GitHub
   still supports them.
 
+## Differences from `@actions/core`
+
+Faithful to the protocol, but **deliberately divergent** where Node semantics
+would be unsafe or dishonest in Rust. None of these change the bytes the runner
+sees; they change what the *calling process* can rely on:
+
+1. **No `std::env` mutation.** `@actions/core`'s `exportVariable` / `addPath`
+   also write `process.env` so the *current* process sees the change. That
+   write is `unsafe` in Rust edition 2024 and this crate is
+   `#![forbid(unsafe_code)]`, so `export_var` / `add_path` only write the env
+   file. For same-process visibility use the safe overlay: `overlay_var`,
+   `overlay_path`, or `apply_overlay(&mut Command)` for child processes.
+2. **No retired-command fallback for env/PATH.** `set_output` / `save_state`
+   keep the merely-*deprecated* `::set-output::` / `::save-state::` stdout
+   fallback. `export_var` / `add_path` do **not** fall back to
+   `::set-env::` / `::add-path::` — GitHub *disabled* those ([CVE-2020-15228],
+   [changelog][gha-setenv]) — so they return `Error::UnavailableFileCommand`
+   off-runner instead of emitting a command the runner ignores.
+3. **Injection guard.** A `\r`/`\n` in an output/state/env key or a `PATH`
+   entry returns `Error::InvalidName` rather than silently injecting extra
+   env-file entries (the [CVE-2020-15228] class). The heredoc delimiter is
+   collision-checked → `Error::DelimiterCollision`.
+4. **Honest errors.** Filesystem/parse operations return `Result`; pure
+   stdout commands stay infallible. No swallowed errors, no fake channel.
+5. **Summary escaped by default.** `Summary` HTML-escapes text and attributes;
+   raw HTML is explicit opt-in via `SummaryText::html`. `@actions/core`
+   concatenates raw HTML.
+6. **Deferred failure, not `process.exit`.** `set_failed` sets a flag instead
+   of exiting; `is_failed()` / `exit_code() -> std::process::ExitCode` let
+   `main` decide *when* to exit, so destructors and cleanup still run.
+
 ## Honest comparison with the alternatives
 
 This is not the only crate in this space. Pick the right tool:
@@ -70,14 +103,12 @@ This is not the only crate in this space. Pick the right tool:
 | [`gha`]               | zero                         | not as a builder                | yes       | basic           | yes     | no                                   | closest overlap; mature, macro-style  |
 | [`ghactions`]         | octocrab/serde/derive (opt.) | no                              | yes       | yes (derive)    | no      | yes (`#[derive(Actions)]`, octocrab) | biggest, batteries-included           |
 | [`github-actions`]    | `uuid` (opt.)                | no                              | yes       | yes             | yes     | no                                   | similar, tiny                         |
-| [`actions-core`]      | `uuid 0.8`                   | no (loose `file`/`line`/`col`)  | no[^ac]   | basic           | no      | no                                   | v0.0.2, ~abandoned                    |
+| [`actions-core`]      | `uuid 0.8`                   | no (loose `file`/`line`/`col`)  | no[^ac]   | basic           | no      | no                                   | v0.0.2 (2020-04-01)                   |
 
-[^ac]: Verified from its `core.rs` (last release 0.0.2, 2020-04-01):
-    `set_env` / `add_path` emit the stdout `::set-env::` / `::add-path::`
-    commands — the [CVE-2020-15228] pair GitHub **actually disabled** (runner
-    v2.273.5, Nov 2020), not the merely-deprecated `::set-output::` /
-    `::save-state::` pair. So its env-var / `PATH` support is broken on
-    current runners.
+[^ac]: From its published `core.rs` (latest release 0.0.2, 2020-04-01, per [crates.io][actions-core-cratesio]):
+    `set_env` / `add_path` emit the stdout `::set-env::` / `::add-path::` workflow commands.\
+    GitHub announced the disabling of that command pair in October 2020 ([changelog][gha-setenv], [CVE-2020-15228])
+    — distinct from the `::set-output::` / `::save-state::` pair, which was later only deprecated.
 
 **When to use this one:** you want zero dependencies and `#![forbid(unsafe_code)]`
 in a CI/security context, and you care about correct, ranged annotations.\
@@ -154,6 +185,8 @@ See [`examples/demo.rs`] for a runnable tour.
   this is an independent crate of the same (previously unregistered) name.
 
 [CVE-2020-15228]: https://nvd.nist.gov/vuln/detail/cve-2020-15228
+[gha-setenv]: https://github.blog/changelog/2020-10-01-github-actions-deprecating-set-env-and-add-path-commands/
+[actions-core-cratesio]: https://crates.io/crates/actions-core/versions
 [`@actions/core`]: https://github.com/actions/toolkit/tree/main/packages/core
 [`actions-core`]: https://crates.io/crates/actions-core
 [`examples/demo.rs`]: ./examples/demo.rs

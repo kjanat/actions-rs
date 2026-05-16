@@ -76,6 +76,9 @@ fn is_reserved(name: &str) -> bool {
 }
 
 /// Return the effective same-process value for `name`, including any overlay created by [`export_var`] and [`add_path`].
+///
+/// Safe substitute for the `process.env` write `@actions/core`'s
+/// `exportVariable` performs and [`export_var`] deliberately omits.
 #[must_use]
 pub fn overlay_var(name: &str) -> Option<String> {
     let overlay = lock_overlay();
@@ -91,6 +94,9 @@ pub fn overlay_var(name: &str) -> Option<String> {
 }
 
 /// Return the effective same-process `PATH`, including any pending [`add_path`] prefixes and `PATH` exported through [`export_var`].
+///
+/// Safe substitute for the `process.env.PATH` write `@actions/core`'s
+/// `addPath` performs and [`add_path`] deliberately omits.
 #[must_use]
 pub fn overlay_path() -> Option<String> {
     let overlay = lock_overlay();
@@ -98,6 +104,10 @@ pub fn overlay_path() -> Option<String> {
 }
 
 /// Apply the safe same-process overlay to a child command.
+///
+/// The single safe equivalent of the `process.env` mutations `@actions/core`'s
+/// `exportVariable` / `addPath` perform: spawn children through this so they
+/// observe [`export_var`] / [`add_path`] changes without `unsafe` env writes.
 pub fn apply_overlay(command: &mut Command) -> &mut Command {
     let overlay = lock_overlay();
     for (name, value) in &overlay.vars {
@@ -114,7 +124,9 @@ pub fn apply_overlay(command: &mut Command) -> &mut Command {
 /// Readable by later steps as `${{ steps.<id>.outputs.<name> }}`.
 ///
 /// # Errors
-/// [`crate::Error`] on a file-command write failure or delimiter collision.
+/// [`crate::Error::InvalidName`] when `name` contains a carriage return or line feed;\
+/// [`crate::Error::DelimiterCollision`] on the (astronomically unlikely) heredoc-delimiter clash;\
+/// otherwise [`crate::Error`] on a file-command write failure.
 ///
 /// # Examples
 ///
@@ -142,7 +154,9 @@ pub fn set_output(name: &str, value: impl Display) -> Result<()> {
 /// Read it back with [`get_state`].
 ///
 /// # Errors
-/// [`crate::Error`] on a file-command write failure or delimiter collision.
+/// [`crate::Error::InvalidName`] when `name` contains a carriage return or line feed;\
+/// [`crate::Error::DelimiterCollision`] on the (astronomically unlikely) heredoc-delimiter clash;\
+/// otherwise [`crate::Error`] on a file-command write failure.
 pub fn save_state(name: &str, value: impl Display) -> Result<()> {
     let value = value.to_string();
     let msg = key_value_message(name, &value)?;
@@ -172,9 +186,11 @@ pub fn get_state(name: &str) -> Option<String> {
 /// Use [`overlay_var`] / [`apply_overlay`] when the current process needs to observe the change safely.
 ///
 /// # Errors
-/// [`crate::Error::ReservedName`] for `GITHUB_*` / `RUNNER_*` / `NODE_OPTIONS`;
-/// [`crate::Error::UnavailableFileCommand`] when `GITHUB_ENV` is unset;
-/// otherwise on a file-command write failure or delimiter collision.
+/// [`crate::Error::ReservedName`] for `GITHUB_*` / `RUNNER_*` / `NODE_OPTIONS`;\
+/// [`crate::Error::InvalidName`] when `name` contains a carriage return or line feed;\
+/// [`crate::Error::UnavailableFileCommand`] when `GITHUB_ENV` is unset;\
+/// [`crate::Error::DelimiterCollision`] on the (astronomically unlikely) heredoc-delimiter clash;\
+/// otherwise on a file-command write failure.
 ///
 /// # Examples
 ///
@@ -199,10 +215,12 @@ pub fn export_var(name: &str, value: impl Display) -> Result<()> {
 }
 
 /// Prepend a directory to `PATH` for subsequent steps via `GITHUB_PATH`.
+///
 /// The file format is a bare directory per line — not a heredoc key/value pair.
 ///
 /// # Errors
-/// [`crate::Error::UnavailableFileCommand`] when `GITHUB_PATH` is unset;
+/// [`crate::Error::InvalidName`] when `dir` contains a carriage return or line feed;\
+/// [`crate::Error::UnavailableFileCommand`] when `GITHUB_PATH` is unset;\
 /// otherwise on a file-command write failure.
 pub fn add_path(dir: impl Display) -> Result<()> {
     let dir = dir.to_string();

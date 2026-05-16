@@ -1,6 +1,9 @@
 //! # actions-rs
 //!
-//! A **zero-dependency** toolkit for writing GitHub Actions in Rust — the Rust analogue of `@actions/core`.
+//! A **zero-dependency** toolkit for writing GitHub Actions in Rust — an independent, unofficial
+//! Rust port of `@actions/core` (faithful API and semantics, with deliberate safety-first departures;
+//! not affiliated with or endorsed by GitHub or the `@actions/toolkit` project).
+//!
 //! It speaks the GitHub Actions *workflow-command* and *environment-file* protocols so your action can:
 //!
 //! - emit `notice` / `warning` / `error` annotations with file + line/column ranges ([`Annotation`], [`log`]),
