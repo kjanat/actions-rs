@@ -28,8 +28,8 @@ Annotation::new()
     })
     .title("clippy::needless_clone")
     .warning("redundant clone of `cfg`");
-// -> ::warning title=clippy%3A%3Aneedless_clone,file=src/parser.rs,\
-//    line=42,col=5,endColumn=7::redundant clone of `cfg`
+// emits this single line to stdout:
+// ::warning title=clippy%3A%3Aneedless_clone,file=src/parser.rs,line=42,col=5,endColumn=7::redundant clone of `cfg`
 ```
 
 Around that it provides the rest of the toolkit surface:
