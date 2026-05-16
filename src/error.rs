@@ -15,6 +15,14 @@ use std::path::PathBuf;
 pub enum Error {
     /// An underlying I/O error while reading or appending an environment file.
     Io(std::io::Error),
+    /// The runner did not provide the required environment-file path for an
+    /// operation whose stdout command fallback has been retired.
+    UnavailableFileCommand {
+        /// The environment variable that should point at the file.
+        var: &'static str,
+        /// The attempted operation (for diagnostics).
+        operation: &'static str,
+    },
     /// The environment-file variable pointed at a path that does not exist.
     ///
     /// GitHub sets these (`GITHUB_ENV`, `GITHUB_OUTPUT`, ...) to a real file;
@@ -61,6 +69,10 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Error::Io(e) => write!(f, "i/o error: {e}"),
+            Error::UnavailableFileCommand { var, operation } => write!(
+                f,
+                "`{operation}` requires `{var}`; GitHub retired the stdout fallback for this operation"
+            ),
             Error::MissingEnvFile { var, path } => {
                 write!(f, "{var} points at missing file: {}", path.display())
             }

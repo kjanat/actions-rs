@@ -38,6 +38,21 @@ fn with_env_file(var: &str, f: impl FnOnce(&Path)) {
     }
 }
 
+fn with_env_var(var: &str, value: &str, f: impl FnOnce()) {
+    let _guard = ENV_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    unsafe { std::env::set_var(var, value) };
+
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f));
+
+    unsafe { std::env::remove_var(var) };
+
+    if let Err(payload) = result {
+        std::panic::resume_unwind(payload);
+    }
+}
+
 #[test]
 fn set_output_writes_validated_heredoc() {
     with_env_file("GITHUB_OUTPUT", |path| {
@@ -113,4 +128,48 @@ fn get_state_reads_state_prefixed_var() {
 fn export_reserved_name_is_rejected() {
     let err = actions_rs::output::export_var("GITHUB_SHA", "x").unwrap_err();
     assert!(matches!(err, actions_rs::Error::ReservedName(_)));
+}
+
+#[test]
+fn required_input_accepts_whitespace_only_then_trims() {
+    with_env_var("INPUT_FLAG", "   ", || {
+        let value = actions_rs::input::input_required("flag").unwrap();
+        assert_eq!(value, "");
+    });
+}
+
+#[test]
+fn multiline_input_keeps_whitespace_only_lines() {
+    with_env_var("INPUT_ITEMS", "a\n   \n\n b\n", || {
+        assert_eq!(
+            actions_rs::input::multiline_input("items"),
+            vec!["a".to_owned(), "".to_owned(), "b".to_owned()]
+        );
+    });
+}
+
+#[test]
+fn summary_write_drains_buffer() {
+    with_env_file("GITHUB_STEP_SUMMARY", |path| {
+        let mut summary = actions_rs::Summary::new();
+        summary.heading("One", 2);
+        summary.write().unwrap();
+        assert!(summary.is_empty());
+
+        summary.write().unwrap();
+        let content = std::fs::read_to_string(path).unwrap();
+        assert_eq!(content, "<h2>One</h2>\n");
+    });
+}
+
+#[test]
+fn summary_append_limit_counts_existing_file_bytes() {
+    with_env_file("GITHUB_STEP_SUMMARY", |path| {
+        std::fs::write(path, "x".repeat(700 * 1024)).unwrap();
+
+        let mut summary = actions_rs::Summary::new();
+        summary.raw("y".repeat(400 * 1024), false);
+        let err = summary.write().unwrap_err();
+        assert!(matches!(err, actions_rs::Error::SummaryTooLarge { .. }));
+    });
 }

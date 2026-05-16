@@ -4,7 +4,7 @@
 //! files first, e.g.:
 //!
 //! ```sh
-//! GITHUB_OUTPUT=$(mktemp) GITHUB_STEP_SUMMARY=$(mktemp) \
+//! GITHUB_OUTPUT=$(mktemp) GITHUB_ENV=$(mktemp) GITHUB_STEP_SUMMARY=$(mktemp) \
 //!     cargo run --example demo
 //! ```
 
@@ -49,7 +49,15 @@ fn main() {
     actions_rs::warning!("formatted macro: {} items left", 7);
 
     output::set_output("answer", 42).expect("set_output");
-    output::export_var("DEMO_FLAG", true).expect("export_var");
+    match output::export_var("DEMO_FLAG", true) {
+        Ok(()) => {}
+        Err(actions_rs::Error::UnavailableFileCommand {
+            var: "GITHUB_ENV", ..
+        }) => {
+            log::info("GITHUB_ENV unset; skipping export_var in local demo");
+        }
+        Err(err) => panic!("export_var: {err}"),
+    }
 
     let mut summary = Summary::new();
     summary

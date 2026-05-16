@@ -17,17 +17,19 @@ silently corrupts annotations in the GitHub UI — this crate gets it right and
 unit-tests the encoding tables directly.
 
 ```rust
-use actions_rs::Annotation;
+use actions_rs::{Annotation, AnnotationSpan};
 
 Annotation::new()
     .file("src/parser.rs")
-    .line(42)
-    .end_line(48)
-    .col(5)
+    .span(AnnotationSpan::Column {
+        line: 42,
+        start: 5,
+        end: Some(7),
+    })
     .title("clippy::needless_clone")
     .warning("redundant clone of `cfg`");
 // -> ::warning title=clippy%3A%3Aneedless_clone,file=src/parser.rs,\
-//    line=42,endLine=48,col=5::redundant clone of `cfg`
+//    line=42,col=5,endColumn=7::redundant clone of `cfg`
 ```
 
 Around that it provides the rest of the toolkit surface:
@@ -36,10 +38,12 @@ Around that it provides the rest of the toolkit surface:
   `echo`, `set_failed`/`fail_now`;
 - env files (`GITHUB_ENV`/`OUTPUT`/`STATE`/`PATH`) with a **collision-safe,
   std-only** random heredoc delimiter (the CVE-2020-15228 injection class) and
-  a deprecated-stdout fallback for old runners; reserved-name guard;
+  deprecated stdout fallback only for output/state; reserved-name guard; safe
+  same-process overlay helpers for env/PATH;
 - typed inputs: strict YAML 1.2 `bool_input`, `multiline_input`,
   `input_as::<T: FromStr>`, `mask_input`;
-- a fluent `Summary` builder (1 MiB guarded);
+- a fluent `Summary` builder (1 MiB guarded, escaped by default, raw HTML
+  opt-in via `SummaryText::html`);
 - runtime detection + a typed `Context`;
 - crate-root `warning!` / `group!` / … `format!`-style macros.
 
@@ -52,8 +56,9 @@ Around that it provides the rest of the toolkit surface:
   boolean inputs.
 - **Honest errors.** Filesystem/parse operations return `Result`; pure stdout
   commands are infallible — no fake error channel.
-- **Modern + compatible.** Prefers `GITHUB_ENV`/`GITHUB_OUTPUT`/… and falls
-  back to the deprecated `::set-output::`-style commands on old runners.
+- **Modern + compatible.** Uses `GITHUB_ENV`/`GITHUB_OUTPUT`/… directly; only
+  `set_output` / `save_state` keep deprecated stdout fallbacks where GitHub
+  still supports them.
 
 ## Honest comparison with the alternatives
 
@@ -83,7 +88,7 @@ derive/codegen, tool cache, glob, command exec.
 ## Quick start
 
 ```rust
-use actions_rs::{Annotation, Cell, Summary, log, output};
+use actions_rs::{Annotation, Cell, Summary, SummaryText, log, output};
 
 fn main() -> actions_rs::Result<()> {
     if actions_rs::env::is_github_actions() {
@@ -106,13 +111,17 @@ fn main() -> actions_rs::Result<()> {
     // Group that closes even on panic; returns the closure's value.
     let n = actions_rs::group!("build", { 6 * 7 });
 
-    // Outputs / exported env (env-file with deprecated fallback).
+    // Outputs / exported env.
     output::set_output("answer", n)?;
     output::export_var("BUILD_OK", true)?;
 
     // Job summary.
     let mut s = Summary::new();
     s.heading("Result", 2)
+        .details(
+            "rendering",
+            SummaryText::html("<strong>raw HTML opt-in</strong>"),
+        )
         .table([vec![Cell::header("answer"), Cell::new(n.to_string())]]);
     s.write()?;
     Ok(())
@@ -121,15 +130,15 @@ fn main() -> actions_rs::Result<()> {
 
 ## Module map
 
-| Module       | Purpose                                                                                       |
-| ------------ | --------------------------------------------------------------------------------------------- |
-| `log`        | annotations, `group`, `mask`/`set_secret`, `stop_commands`, `echo`, `set_failed`              |
-| `annotation` | `Annotation` builder (file + line/column range + title)                                       |
-| `input`      | `input`, `input_required`, `bool_input`, `multiline_input`, `input_as::<T>`, `mask_input`     |
-| `output`     | `set_output`, `save_state`, `get_state`, `export_var`, `add_path`                             |
-| `summary`    | fluent `Summary` builder (1 MiB guarded)                                                      |
-| `env`        | `is_github_actions`/`is_ci`/`is_debug`, `RunnerOs`, `RunnerArch`, `Context`, `vars` constants |
-| `command`    | low-level `WorkflowCommand` for anything not covered above                                    |
+| Module       | Purpose                                                                                                           |
+| ------------ | ----------------------------------------------------------------------------------------------------------------- |
+| `log`        | annotations, `group`, `mask`/`set_secret`, `stop_commands`, `echo`, `set_failed`                                  |
+| `annotation` | `Annotation` builder (`AnnotationSpan`, file + line/column range + title)                                         |
+| `input`      | `input`, `input_required`, `bool_input`, `multiline_input`, `multiline_input_with`, `input_as::<T>`, `mask_input` |
+| `output`     | `set_output`, `save_state`, `get_state`, `export_var`, `add_path`, `overlay_var`, `overlay_path`, `apply_overlay` |
+| `summary`    | fluent `Summary` builder (`SummaryText::html` for raw HTML, 1 MiB guarded)                                        |
+| `env`        | `is_github_actions`/`is_ci`/`is_debug`, `RunnerOs`, `RunnerArch`, `Context`, `vars` constants                     |
+| `command`    | low-level `WorkflowCommand` for anything not covered above                                                        |
 
 See `examples/demo.rs` for a runnable tour.
 

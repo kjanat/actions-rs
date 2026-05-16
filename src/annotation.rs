@@ -29,6 +29,28 @@ impl AnnotationKind {
     }
 }
 
+/// A valid annotation span.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AnnotationSpan {
+    /// A whole-line span.
+    Line {
+        /// The 1-based start line.
+        start: u32,
+        /// The optional 1-based end line.
+        end: Option<u32>,
+    },
+    /// A same-line column span. When `end` is omitted GitHub treats the span as
+    /// a single column.
+    Column {
+        /// The 1-based line.
+        line: u32,
+        /// The 1-based start column.
+        start: u32,
+        /// The optional 1-based end column.
+        end: Option<u32>,
+    },
+}
+
 /// Fluent builder for a located annotation.
 ///
 /// All fields are optional — an empty `Annotation` simply produces a plain
@@ -107,6 +129,27 @@ impl Annotation {
         self
     }
 
+    /// Replace the current location fields with a span that is valid by
+    /// construction.
+    #[must_use]
+    pub fn span(mut self, span: AnnotationSpan) -> Self {
+        match span {
+            AnnotationSpan::Line { start, end } => {
+                self.line = Some(start);
+                self.end_line = end;
+                self.col = None;
+                self.end_column = None;
+            }
+            AnnotationSpan::Column { line, start, end } => {
+                self.line = Some(line);
+                self.end_line = None;
+                self.col = Some(start);
+                self.end_column = end;
+            }
+        }
+        self
+    }
+
     /// Build the [`WorkflowCommand`] for this annotation and `message` without
     /// emitting it. Useful for testing or custom sinks.
     ///
@@ -114,13 +157,27 @@ impl Annotation {
     /// `title, file, line, endLine, col, endColumn`.
     #[must_use]
     pub fn command(&self, kind: AnnotationKind, message: impl Into<String>) -> WorkflowCommand {
+        let line = self.line;
+        let end_line = self.end_line.filter(|_| line.is_some());
+        let same_line = match (line, end_line) {
+            (Some(_), None) => true,
+            (Some(start), Some(end)) => start == end,
+            _ => false,
+        };
+        let col = if same_line { self.col } else { None };
+        let end_column = if same_line {
+            col.map(|start| self.end_column.unwrap_or(start))
+        } else {
+            None
+        };
+
         WorkflowCommand::new(kind.command_name())
             .property_opt("title", self.title.clone())
             .property_opt("file", self.file.clone())
-            .property_opt("line", self.line.map(|n| n.to_string()))
-            .property_opt("endLine", self.end_line.map(|n| n.to_string()))
-            .property_opt("col", self.col.map(|n| n.to_string()))
-            .property_opt("endColumn", self.end_column.map(|n| n.to_string()))
+            .property_opt("line", line.map(|n| n.to_string()))
+            .property_opt("endLine", end_line.map(|n| n.to_string()))
+            .property_opt("col", col.map(|n| n.to_string()))
+            .property_opt("endColumn", end_column.map(|n| n.to_string()))
             .message(message)
     }
 
@@ -162,7 +219,7 @@ mod tests {
             .command(AnnotationKind::Notice, "msg");
         assert_eq!(
             c.to_string(),
-            "::notice title=t,file=f.rs,line=1,endLine=2,col=3,endColumn=4::msg"
+            "::notice title=t,file=f.rs,line=1,endLine=2::msg"
         );
     }
 
@@ -173,5 +230,29 @@ mod tests {
             .line(7)
             .command(AnnotationKind::Warning, "w");
         assert_eq!(c.to_string(), "::warning file=x,line=7::w");
+    }
+
+    #[test]
+    fn multiline_range_drops_columns() {
+        let c = Annotation::new()
+            .file("x")
+            .line(7)
+            .end_line(8)
+            .col(3)
+            .end_column(9)
+            .command(AnnotationKind::Warning, "w");
+        assert_eq!(c.to_string(), "::warning file=x,line=7,endLine=8::w");
+    }
+
+    #[test]
+    fn column_span_defaults_end_column() {
+        let c = Annotation::new()
+            .span(AnnotationSpan::Column {
+                line: 7,
+                start: 3,
+                end: None,
+            })
+            .command(AnnotationKind::Warning, "w");
+        assert_eq!(c.to_string(), "::warning line=7,col=3,endColumn=3::w");
     }
 }

@@ -9,7 +9,7 @@ use std::fmt::Write as _;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use actions_rs::{Annotation, AnnotationKind, Summary, output};
+use actions_rs::{Annotation, AnnotationKind, AnnotationSpan, Summary, output};
 
 fn read_env_file(var: &str) -> Option<String> {
     std::fs::read_to_string(PathBuf::from(std::env::var_os(var)?)).ok()
@@ -18,9 +18,10 @@ fn read_env_file(var: &str) -> Option<String> {
 fn main() -> ExitCode {
     let notice = Annotation::new()
         .file("examples/ci_selfcheck.rs")
-        .line(18)
-        .end_line(24)
-        .col(5)
+        .span(AnnotationSpan::Line {
+            start: 18,
+            end: Some(24),
+        })
         .title("ci_selfcheck")
         .command(
             AnnotationKind::Notice,
@@ -28,9 +29,11 @@ fn main() -> ExitCode {
         );
     let warning = Annotation::new()
         .file("src/summary.rs")
-        .line(112)
-        .end_line(126)
-        .col(5)
+        .span(AnnotationSpan::Column {
+            line: 112,
+            start: 5,
+            end: None,
+        })
         .title("example warning")
         .command(
             AnnotationKind::Warning,
@@ -44,8 +47,16 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     }
     if let Err(e) = output::export_var("DEMO_FLAG", true) {
-        eprintln!("::error::export_var: {e}");
-        return ExitCode::FAILURE;
+        if !matches!(
+            e,
+            actions_rs::Error::UnavailableFileCommand {
+                var: "GITHUB_ENV",
+                ..
+            }
+        ) {
+            eprintln!("::error::export_var: {e}");
+            return ExitCode::FAILURE;
+        }
     }
 
     let gh_output = read_env_file("GITHUB_OUTPUT").unwrap_or_else(|| "<local: unset>".into());

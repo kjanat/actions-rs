@@ -1,13 +1,17 @@
 //! Fluent builder for the job summary (`GITHUB_STEP_SUMMARY`).
 //!
-//! The summary is GitHub-Flavored Markdown with embedded HTML. This builder
-//! emits the same HTML fragments as `@actions/core`'s `summary` API. Buffer
+//! The summary is GitHub-Flavored Markdown with embedded HTML. Buffer
 //! construction is pure (testable via [`Summary::stringify`]); only
 //! [`Summary::write`] / [`Summary::write_overwrite`] touch the filesystem and
 //! can fail.
+//!
+//! Text node content is escaped by default. Use [`SummaryText::html`] or
+//! [`Summary::raw`] when you intentionally want raw HTML parity with
+//! `@actions/core`.
 
 use std::fmt::Write as _;
 use std::fs::OpenOptions;
+use std::io::ErrorKind;
 use std::io::Write as _;
 
 use crate::error::{Error, Result};
@@ -28,11 +32,60 @@ fn esc_attr(s: &str) -> String {
     esc_text(s).replace('"', "&quot;")
 }
 
+/// Text destined for a summary element.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SummaryText {
+    /// Escape HTML metacharacters before rendering.
+    Escaped(String),
+    /// Insert trusted HTML verbatim.
+    Html(String),
+}
+
+impl SummaryText {
+    /// Escape `text` before rendering it into an element body.
+    #[must_use]
+    pub fn escaped(text: impl Into<String>) -> Self {
+        Self::Escaped(text.into())
+    }
+
+    /// Insert trusted HTML verbatim into an element body.
+    #[must_use]
+    pub fn html(html: impl Into<String>) -> Self {
+        Self::Html(html.into())
+    }
+
+    fn into_html(self) -> String {
+        match self {
+            SummaryText::Escaped(text) => esc_text(&text),
+            SummaryText::Html(html) => html,
+        }
+    }
+}
+
+impl From<&str> for SummaryText {
+    fn from(text: &str) -> Self {
+        SummaryText::escaped(text)
+    }
+}
+
+impl From<&String> for SummaryText {
+    fn from(text: &String) -> Self {
+        SummaryText::escaped(text.clone())
+    }
+}
+
+impl From<String> for SummaryText {
+    fn from(text: String) -> Self {
+        SummaryText::escaped(text)
+    }
+}
+
 /// A table cell. Use [`Cell::header`] for `<th>`; `colspan`/`rowspan` map to
-/// the matching HTML attributes.
+/// the matching HTML attributes. Cell content is escaped unless you pass
+/// [`SummaryText::html`].
 #[derive(Debug, Clone)]
 pub struct Cell {
-    data: String,
+    data: SummaryText,
     header: bool,
     colspan: u32,
     rowspan: u32,
@@ -41,7 +94,7 @@ pub struct Cell {
 impl Cell {
     /// A `<td>` cell.
     #[must_use]
-    pub fn new(data: impl Into<String>) -> Self {
+    pub fn new(data: impl Into<SummaryText>) -> Self {
         Self {
             data: data.into(),
             header: false,
@@ -52,7 +105,7 @@ impl Cell {
 
     /// A `<th>` header cell.
     #[must_use]
-    pub fn header(data: impl Into<String>) -> Self {
+    pub fn header(data: impl Into<SummaryText>) -> Self {
         Self {
             header: true,
             ..Self::new(data)
@@ -83,6 +136,12 @@ impl From<&str> for Cell {
 impl From<String> for Cell {
     fn from(s: String) -> Self {
         Cell::new(s)
+    }
+}
+
+impl From<SummaryText> for Cell {
+    fn from(text: SummaryText) -> Self {
+        Cell::new(text)
     }
 }
 
@@ -121,10 +180,12 @@ impl Summary {
         self
     }
 
-    /// Append an `<h1>`–`<h6>` heading (`level` clamped to 1..=6).
-    pub fn heading(&mut self, text: impl AsRef<str>, level: u8) -> &mut Self {
+    /// Append an `<h1>`–`<h6>` heading (`level` clamped to 1..=6`). Text is
+    /// escaped unless you pass [`SummaryText::html`].
+    pub fn heading(&mut self, text: impl Into<SummaryText>, level: u8) -> &mut Self {
         let l = level.clamp(1, 6);
-        let _ = writeln!(self.buf, "<h{l}>{}</h{l}>", esc_text(text.as_ref()));
+        let text = text.into().into_html();
+        let _ = writeln!(self.buf, "<h{l}>{text}</h{l}>");
         self
     }
 
@@ -150,14 +211,14 @@ impl Summary {
     pub fn list<I, S>(&mut self, items: I, ordered: bool) -> &mut Self
     where
         I: IntoIterator<Item = S>,
-        S: AsRef<str>,
+        S: Into<SummaryText>,
     {
         let tag = if ordered { "ol" } else { "ul" };
         self.buf.push('<');
         self.buf.push_str(tag);
         self.buf.push('>');
         for item in items {
-            let _ = write!(self.buf, "<li>{}</li>", esc_text(item.as_ref()));
+            let _ = write!(self.buf, "<li>{}</li>", item.into().into_html());
         }
         let _ = writeln!(self.buf, "</{tag}>");
         self
@@ -175,7 +236,7 @@ impl Summary {
                     "<{tag} colspan=\"{}\" rowspan=\"{}\">{}</{tag}>",
                     cell.colspan,
                     cell.rowspan,
-                    esc_text(&cell.data)
+                    cell.data.into_html()
                 );
             }
             self.buf.push_str("</tr>");
@@ -184,13 +245,19 @@ impl Summary {
         self
     }
 
-    /// Append a `<details>` block with a `<summary>` label.
-    pub fn details(&mut self, label: impl AsRef<str>, content: impl AsRef<str>) -> &mut Self {
+    /// Append a `<details>` block with a `<summary>` label. Both text nodes are
+    /// escaped unless you pass [`SummaryText::html`].
+    pub fn details(
+        &mut self,
+        label: impl Into<SummaryText>,
+        content: impl Into<SummaryText>,
+    ) -> &mut Self {
+        let label = label.into().into_html();
+        let content = content.into().into_html();
         let _ = writeln!(
             self.buf,
             "<details><summary>{}</summary>{}</details>",
-            esc_text(label.as_ref()),
-            esc_text(content.as_ref())
+            label, content
         );
         self
     }
@@ -214,34 +281,34 @@ impl Summary {
         self
     }
 
-    /// Append an `<a>` link.
-    pub fn link(&mut self, text: impl AsRef<str>, href: impl AsRef<str>) -> &mut Self {
+    /// Append an `<a>` link. The link text is escaped unless you pass
+    /// [`SummaryText::html`]; `href` is always attribute-escaped.
+    pub fn link(&mut self, text: impl Into<SummaryText>, href: impl AsRef<str>) -> &mut Self {
+        let text = text.into().into_html();
         let _ = writeln!(
             self.buf,
             "<a href=\"{}\">{}</a>",
             esc_attr(href.as_ref()),
-            esc_text(text.as_ref())
+            text
         );
         self
     }
 
-    /// Append a `<blockquote>` with an optional `cite` URL.
-    pub fn quote(&mut self, text: impl AsRef<str>, cite: Option<&str>) -> &mut Self {
+    /// Append a `<blockquote>` with an optional `cite` URL. Quote text is
+    /// escaped unless you pass [`SummaryText::html`].
+    pub fn quote(&mut self, text: impl Into<SummaryText>, cite: Option<&str>) -> &mut Self {
+        let text = text.into().into_html();
         match cite {
             Some(c) => {
                 let _ = writeln!(
                     self.buf,
                     "<blockquote cite=\"{}\">{}</blockquote>",
                     esc_attr(c),
-                    esc_text(text.as_ref())
+                    text
                 );
             }
             None => {
-                let _ = writeln!(
-                    self.buf,
-                    "<blockquote>{}</blockquote>",
-                    esc_text(text.as_ref())
-                );
+                let _ = writeln!(self.buf, "<blockquote>{text}</blockquote>");
             }
         }
         self
@@ -277,8 +344,9 @@ impl Summary {
         self
     }
 
-    fn write_inner(&self, append: bool) -> Result<()> {
-        if self.buf.len() > MAX_BYTES {
+    fn write_inner(&mut self, append: bool) -> Result<()> {
+        let write_bytes = self.buf.len() as u64;
+        if write_bytes > MAX_BYTES as u64 {
             return Err(Error::SummaryTooLarge {
                 bytes: self.buf.len(),
             });
@@ -286,8 +354,24 @@ impl Summary {
         let Some(path) = std::env::var_os("GITHUB_STEP_SUMMARY") else {
             // Not in Actions / summaries disabled: nothing to write to. This
             // is a normal local-run condition, not an error.
+            self.clear();
             return Ok(());
         };
+        let existing_bytes = if append {
+            match std::fs::metadata(&path) {
+                Ok(meta) => meta.len(),
+                Err(err) if err.kind() == ErrorKind::NotFound => 0,
+                Err(err) => return Err(err.into()),
+            }
+        } else {
+            0
+        };
+        let total_bytes = existing_bytes.saturating_add(write_bytes);
+        if total_bytes > MAX_BYTES as u64 {
+            return Err(Error::SummaryTooLarge {
+                bytes: usize::try_from(total_bytes).unwrap_or(usize::MAX),
+            });
+        }
         let mut file = OpenOptions::new()
             .create(true)
             .append(append)
@@ -295,6 +379,7 @@ impl Summary {
             .truncate(!append)
             .open(path)?;
         file.write_all(self.buf.as_bytes())?;
+        self.clear();
         Ok(())
     }
 
@@ -302,7 +387,7 @@ impl Summary {
     ///
     /// # Errors
     /// [`Error::SummaryTooLarge`] if the buffer exceeds 1 MiB, or an I/O error.
-    pub fn write(&self) -> Result<()> {
+    pub fn write(&mut self) -> Result<()> {
         self.write_inner(true)
     }
 
@@ -310,7 +395,7 @@ impl Summary {
     ///
     /// # Errors
     /// [`Error::SummaryTooLarge`] if the buffer exceeds 1 MiB, or an I/O error.
-    pub fn write_overwrite(&self) -> Result<()> {
+    pub fn write_overwrite(&mut self) -> Result<()> {
         self.write_inner(false)
     }
 }
@@ -352,6 +437,19 @@ mod tests {
         let mut r = Summary::new();
         r.raw("<b>kept</b>", false);
         assert_eq!(r.stringify(), "<b>kept</b>");
+    }
+
+    #[test]
+    fn raw_html_is_opt_in() {
+        let mut s = Summary::new();
+        s.details(
+            SummaryText::html("<b>open</b>"),
+            SummaryText::html("<p>surprise</p>"),
+        );
+        assert_eq!(
+            s.stringify(),
+            "<details><summary><b>open</b></summary><p>surprise</p></details>\n"
+        );
     }
 
     #[test]

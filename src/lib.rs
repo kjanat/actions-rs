@@ -10,8 +10,8 @@
 //!   ([`log::group`], [`log::mask`], [`log::stop_commands`]),
 //! - read typed, validated inputs ([`input`]),
 //! - set step outputs, saved state, env vars and `PATH`
-//!   ([`output`]) — preferring the modern env-file mechanism with an
-//!   automatic deprecated-command fallback,
+//!   ([`output`]) — using modern env files, with deprecated-command fallback
+//!   only for output/state,
 //! - build a rich job summary ([`Summary`]),
 //! - detect and inspect the runtime ([`env`](mod@env)).
 //!
@@ -56,19 +56,21 @@ mod macros;
 pub mod output;
 pub mod summary;
 
-pub use annotation::{Annotation, AnnotationKind};
+pub use annotation::{Annotation, AnnotationKind, AnnotationSpan};
 pub use command::WorkflowCommand;
 pub use env::{Context, RunnerArch, RunnerOs};
 pub use error::{Error, Result};
 pub use input::InputOptions;
-pub use summary::{Cell, Summary};
+pub use summary::{Cell, Summary, SummaryText};
 
 /// Common imports for action authors: `use actions_rs::prelude::*;`.
 pub mod prelude {
     pub use crate::error::{Error, Result};
     pub use crate::input::InputOptions;
-    pub use crate::summary::{Cell, Summary};
-    pub use crate::{Annotation, AnnotationKind, Context, RunnerArch, RunnerOs, WorkflowCommand};
+    pub use crate::summary::{Cell, Summary, SummaryText};
+    pub use crate::{
+        Annotation, AnnotationKind, AnnotationSpan, Context, RunnerArch, RunnerOs, WorkflowCommand,
+    };
     pub use crate::{debug, error, group, info, notice, warning};
     pub use crate::{env, input, log, output};
 }

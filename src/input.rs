@@ -51,14 +51,14 @@ fn raw(name: &str) -> Option<String> {
 /// absent or (after optional trimming) empty.
 pub fn input_with(name: &str, options: InputOptions) -> Result<String> {
     let value = raw(name).unwrap_or_default();
+    if options.required && value.is_empty() {
+        return Err(Error::MissingRequiredInput(name.to_owned()));
+    }
     let value = if options.trim {
         value.trim().to_owned()
     } else {
         value
     };
-    if options.required && value.is_empty() {
-        return Err(Error::MissingRequiredInput(name.to_owned()));
-    }
     Ok(value)
 }
 
@@ -116,16 +116,36 @@ pub fn bool_input(name: &str) -> Result<bool> {
 /// is trimmed.
 #[must_use]
 pub fn multiline_input(name: &str) -> Vec<String> {
-    split_multiline(&input(name))
+    multiline_input_with(name, InputOptions::default()).unwrap_or_default()
 }
 
-fn split_multiline(value: &str) -> Vec<String> {
-    value
+/// Read a multiline input with explicit [`InputOptions`]. Empty raw lines are
+/// dropped before optional trimming, matching `@actions/core`.
+///
+/// # Errors
+/// [`Error::MissingRequiredInput`] when `options.required` and the input is
+/// absent or empty.
+pub fn multiline_input_with(name: &str, options: InputOptions) -> Result<Vec<String>> {
+    let value = input_with(
+        name,
+        InputOptions {
+            required: options.required,
+            trim: false,
+        },
+    )?;
+    Ok(split_multiline(&value, options.trim))
+}
+
+fn split_multiline(value: &str, trim: bool) -> Vec<String> {
+    let items = value
         .split('\n')
-        .map(str::trim)
-        .filter(|l| !l.is_empty())
-        .map(ToOwned::to_owned)
-        .collect()
+        .filter(|line| !line.is_empty())
+        .map(ToOwned::to_owned);
+    if trim {
+        items.map(|line| line.trim().to_owned()).collect()
+    } else {
+        items.collect()
+    }
 }
 
 /// Read an input and parse it via [`FromStr`].
@@ -190,9 +210,17 @@ mod tests {
     #[test]
     fn multiline_splits_and_trims_and_drops_empty() {
         assert_eq!(
-            split_multiline("a\n  b  \n\n c\n"),
+            split_multiline("a\n  b  \n\n c\n", true),
             vec!["a".to_owned(), "b".to_owned(), "c".to_owned()]
         );
-        assert!(split_multiline("").is_empty());
+        assert!(split_multiline("", true).is_empty());
+    }
+
+    #[test]
+    fn multiline_keeps_whitespace_only_entries_until_after_filter() {
+        assert_eq!(
+            split_multiline("a\n   \n\n b\n", true),
+            vec!["a".to_owned(), "".to_owned(), "b".to_owned()]
+        );
     }
 }
