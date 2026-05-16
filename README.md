@@ -1,11 +1,11 @@
 # actions-rs
 
-A **zero-dependency**, `#![forbid(unsafe_code)]` Rust toolkit for talking to
-the GitHub Actions runner from a binary/Docker action or any CI step. It speaks
-the *workflow-command* and *environment-file* protocols (the Rust analogue of
-[`@actions/core`]).
+<!-- rumdl-disable MD013 -->
 
-[`@actions/core`]: https://github.com/actions/toolkit/tree/main/packages/core
+A **zero-dependency**, `#![forbid(unsafe_code)]` Rust toolkit for talking to
+the GitHub Actions runner from a binary/Docker action or any CI step.\
+It speaks the *workflow-command* and *environment-file* protocols
+(the Rust analogue of [`@actions/core`]).
 
 ## What it's for (and the one thing it does best)
 
@@ -15,8 +15,6 @@ data-vs-property percent-encoding `@actions/core` uses (`%`, `\r`, `\n`
 everywhere; `:`, `,` additionally in properties). Getting that encoding wrong
 silently corrupts annotations in the GitHub UI — this crate gets it right and
 unit-tests the encoding tables directly.
-
-<!-- rumdl-disable MD013 -->
 
 ```rust
 use actions_rs::{Annotation, AnnotationSpan};
@@ -39,7 +37,7 @@ Around that it provides the rest of the toolkit surface:
 - logging + panic-safe `group`, `mask`/`set_secret`, RAII `stop_commands`,
   `echo`, `set_failed`/`fail_now`;
 - env files (`GITHUB_ENV`/`OUTPUT`/`STATE`/`PATH`) with a **collision-safe,
-  std-only** random heredoc delimiter (the CVE-2020-15228 injection class) and
+  std-only** random heredoc delimiter (the [CVE-2020-15228] injection class) and
   deprecated stdout fallback only for output/state; reserved-name guard; safe
   same-process overlay helpers for env/PATH;
 - typed inputs: strict YAML 1.2 `bool_input`, `multiline_input`,
@@ -54,7 +52,7 @@ Around that it provides the rest of the toolkit surface:
 - **Zero dependencies.** Std only. Nothing to audit, fast to build.
 - **Correct by construction.** Percent-encoding for command data vs.
   properties, collision-checked random heredoc delimiters for multiline
-  environment-file values (the CVE-2020-15228 class of bug), strict YAML 1.2
+  environment-file values (the [CVE-2020-15228] class of bug), strict YAML 1.2
   boolean inputs.
 - **Honest errors.** Filesystem/parse operations return `Result`; pure stdout
   commands are infallible — no fake error channel.
@@ -76,22 +74,17 @@ This is not the only crate in this space. Pick the right tool:
 
 [^ac]: Verified from its `core.rs` (last release 0.0.2, 2020-04-01):
     `set_env` / `add_path` emit the stdout `::set-env::` / `::add-path::`
-    commands — the CVE-2020-15228 pair GitHub **actually disabled** (runner
+    commands — the [CVE-2020-15228] pair GitHub **actually disabled** (runner
     v2.273.5, Nov 2020), not the merely-deprecated `::set-output::` /
     `::save-state::` pair. So its env-var / `PATH` support is broken on
     current runners.
 
-[`gha`]: https://crates.io/crates/gha
-[`ghactions`]: https://crates.io/crates/ghactions
-[`github-actions`]: https://crates.io/crates/github-actions
-[`actions-core`]: https://crates.io/crates/actions-core
-
-**When to use this one:** you want zero dependencies and
-`#![forbid(unsafe_code)]` in a CI/security context, and you care about correct,
-ranged annotations. **When not to:** you want a GitHub API client, `action.yml`
-generation, or derive-driven input structs — use [`ghactions`]. If you just
-want zero-dep logging/env helpers and don't need the annotation builder,
-[`gha`] is mature and fine.
+**When to use this one:** you want zero dependencies and `#![forbid(unsafe_code)]`
+in a CI/security context, and you care about correct, ranged annotations.\
+**When not to:** you want a GitHub API client, `action.yml` generation, or
+derive-driven input structs — use [`ghactions`].\
+If you just want zero-dep logging/env helpers and don't need the annotation
+builder, [`gha`] is mature and fine.
 
 Explicitly **out of scope**: REST/GraphQL client, OIDC, `action.yml`
 derive/codegen, tool cache, glob, command exec.
@@ -151,7 +144,7 @@ fn main() -> actions_rs::Result<()> {
 | `env`        | `is_github_actions`/`is_ci`/`is_debug`, `RunnerOs`, `RunnerArch`, `Context`, `vars` constants                        |
 | `command`    | low-level `WorkflowCommand` for anything not covered above                                                           |
 
-See [`examples/demo.rs`](./examples/demo.rs) for a runnable tour.
+See [`examples/demo.rs`] for a runnable tour.
 
 ## Compatibility
 
@@ -159,3 +152,11 @@ See [`examples/demo.rs`](./examples/demo.rs) for a runnable tour.
 - Dual-licensed **MIT OR Apache-2.0**.
 - Unrelated to the archived `actions-rs` GitHub org (`setup-rust` actions);
   this is an independent crate of the same (previously unregistered) name.
+
+[CVE-2020-15228]: https://nvd.nist.gov/vuln/detail/cve-2020-15228
+[`@actions/core`]: https://github.com/actions/toolkit/tree/main/packages/core
+[`actions-core`]: https://crates.io/crates/actions-core
+[`examples/demo.rs`]: ./examples/demo.rs
+[`gha`]: https://crates.io/crates/gha
+[`ghactions`]: https://crates.io/crates/ghactions
+[`github-actions`]: https://crates.io/crates/github-actions
