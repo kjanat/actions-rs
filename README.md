@@ -16,6 +16,8 @@ everywhere; `:`, `,` additionally in properties). Getting that encoding wrong
 silently corrupts annotations in the GitHub UI — this crate gets it right and
 unit-tests the encoding tables directly.
 
+<!-- rumdl-disable MD013 -->
+
 ```rust
 use actions_rs::{Annotation, AnnotationSpan};
 
@@ -140,7 +142,7 @@ fn main() -> actions_rs::Result<()> {
 | `env`        | `is_github_actions`/`is_ci`/`is_debug`, `RunnerOs`, `RunnerArch`, `Context`, `vars` constants                     |
 | `command`    | low-level `WorkflowCommand` for anything not covered above                                                        |
 
-See `examples/demo.rs` for a runnable tour.
+See [`examples/demo.rs`](./examples/demo.rs) for a runnable tour.
 
 ## Compatibility
 

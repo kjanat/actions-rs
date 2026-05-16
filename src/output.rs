@@ -1,14 +1,13 @@
 //! Step outputs, saved state, exported variables and `PATH` additions.
 //!
-//! `set_output` / `save_state` keep a deprecated stdout fallback for older
-//! runners. `export_var` / `add_path` do not: GitHub retired `::set-env::` and
-//! `::add-path::`, so these operations require the corresponding environment
-//! file path from the runner.
+//! `set_output` / `save_state` keep a deprecated stdout fallback for older runners.\
+//! `export_var` / `add_path` do not: GitHub retired `::set-env::` and `::add-path::`,
+//! so these operations require the corresponding environment file path from the runner.
 //!
-//! Because mutating the process environment is `unsafe` in edition 2024 and
-//! this crate forbids `unsafe`, same-process parity is provided through a safe
-//! overlay: use [`overlay_var`], [`overlay_path`] or [`apply_overlay`] when you
-//! need child processes to observe `export_var` / `add_path` changes.
+//! Because mutating the process environment is `unsafe` in edition 2024 and this crate forbids `unsafe`,
+//! same-process parity is provided through a safe overlay:\
+//! use [`overlay_var`], [`overlay_path`] or [`apply_overlay`] when you need child processes to observe
+//! `export_var` / `add_path` changes.
 //!
 //! [dep]: https://github.blog/changelog/2022-10-11-github-actions-deprecating-save-state-and-set-output-commands/
 
@@ -76,8 +75,7 @@ fn is_reserved(name: &str) -> bool {
     name.starts_with("GITHUB_") || name.starts_with("RUNNER_") || name == "NODE_OPTIONS"
 }
 
-/// Return the effective same-process value for `name`, including any overlay
-/// created by [`export_var`] and [`add_path`].
+/// Return the effective same-process value for `name`, including any overlay created by [`export_var`] and [`add_path`].
 #[must_use]
 pub fn overlay_var(name: &str) -> Option<String> {
     let overlay = lock_overlay();
@@ -92,8 +90,7 @@ pub fn overlay_var(name: &str) -> Option<String> {
     }
 }
 
-/// Return the effective same-process `PATH`, including any pending
-/// [`add_path`] prefixes and `PATH` exported through [`export_var`].
+/// Return the effective same-process `PATH`, including any pending [`add_path`] prefixes and `PATH` exported through [`export_var`].
 #[must_use]
 pub fn overlay_path() -> Option<String> {
     let overlay = lock_overlay();
@@ -141,8 +138,8 @@ pub fn set_output(name: &str, value: impl Display) -> Result<()> {
     Ok(())
 }
 
-/// Persist state for the action's `post` step (`GITHUB_STATE`, falling back to
-/// `::save-state::`). Read it back with [`get_state`].
+/// Persist state for the action's `post` step (`GITHUB_STATE`, falling back to `::save-state::`).
+/// Read it back with [`get_state`].
 ///
 /// # Errors
 /// [`crate::Error`] on a file-command write failure or delimiter collision.
@@ -161,8 +158,8 @@ pub fn save_state(name: &str, value: impl Display) -> Result<()> {
     Ok(())
 }
 
-/// Read state saved by a previous phase via [`save_state`] (the runner exposes
-/// it as `STATE_<name>`). `None` when unset.
+/// Read state saved by a previous phase via [`save_state`] (the runner exposes it as `STATE_<name>`).
+/// `None` when unset.
 #[must_use]
 pub fn get_state(name: &str) -> Option<String> {
     std::env::var(format!("STATE_{name}")).ok()
@@ -170,10 +167,9 @@ pub fn get_state(name: &str) -> Option<String> {
 
 /// Export an environment variable to subsequent steps via `GITHUB_ENV`.
 ///
-/// Does **not** mutate the current process environment — subsequent steps run
-/// in fresh processes and read the env file; mutating `std::env` here would be
-/// `unsafe` in edition 2024. Use [`overlay_var`] / [`apply_overlay`] when the
-/// current process needs to observe the change safely.
+/// Does **not** mutate the current process environment — subsequent steps run in fresh processes and read the env file;
+/// mutating `std::env` here would be `unsafe` in edition 2024.
+/// Use [`overlay_var`] / [`apply_overlay`] when the current process needs to observe the change safely.
 ///
 /// # Errors
 /// [`crate::Error::ReservedName`] for `GITHUB_*` / `RUNNER_*` / `NODE_OPTIONS`;
@@ -202,8 +198,8 @@ pub fn export_var(name: &str, value: impl Display) -> Result<()> {
     Ok(())
 }
 
-/// Prepend a directory to `PATH` for subsequent steps via `GITHUB_PATH`. The
-/// file format is a bare directory per line — not a heredoc key/value pair.
+/// Prepend a directory to `PATH` for subsequent steps via `GITHUB_PATH`.
+/// The file format is a bare directory per line — not a heredoc key/value pair.
 ///
 /// # Errors
 /// [`crate::Error::UnavailableFileCommand`] when `GITHUB_PATH` is unset;
