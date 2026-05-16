@@ -72,10 +72,19 @@ This is not the only crate in this space. Pick the right tool:
 | [`gha`]               | zero                         | not as a builder                | yes       | basic           | yes     | no                                   | closest overlap; mature, macro-style  |
 | [`ghactions`]         | octocrab/serde/derive (opt.) | no                              | yes       | yes (derive)    | no      | yes (`#[derive(Actions)]`, octocrab) | biggest, batteries-included           |
 | [`github-actions`]    | `uuid` (opt.)                | no                              | yes       | yes             | yes     | no                                   | similar, tiny                         |
+| [`actions-core`]      | `uuid 0.8`                   | no (loose `file`/`line`/`col`)  | no[^ac]   | basic           | no      | no                                   | v0.0.2, ~abandoned                    |
+
+[^ac]: Verified from its `core.rs` (last release 0.0.2, 2020-04-01):
+    `set_env` / `add_path` emit the stdout `::set-env::` / `::add-path::`
+    commands — the CVE-2020-15228 pair GitHub **actually disabled** (runner
+    v2.273.5, Nov 2020), not the merely-deprecated `::set-output::` /
+    `::save-state::` pair. So its env-var / `PATH` support is broken on
+    current runners.
 
 [`gha`]: https://crates.io/crates/gha
 [`ghactions`]: https://crates.io/crates/ghactions
 [`github-actions`]: https://crates.io/crates/github-actions
+[`actions-core`]: https://crates.io/crates/actions-core
 
 **When to use this one:** you want zero dependencies and
 `#![forbid(unsafe_code)]` in a CI/security context, and you care about correct,
