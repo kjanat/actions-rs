@@ -1,16 +1,18 @@
 [package]
-name         = "actions-rs"
-version      = "0.1.0"
-edition      = "2024"
-rust-version = "1.95"
-description  = "Zero-dependency toolkit for writing GitHub Actions in Rust: annotations, workflow commands, environment files, typed inputs and job summaries."
-authors      = ["Kaj Kowalski <info@kajkowalski.nl>"]
-license      = "MIT OR Apache-2.0"
-repository   = "https://github.com/kjanat/actions-rs"
-homepage     = "https://github.com/kjanat/actions-rs"
-readme       = "README.md"
-keywords     = ["actions", "ci", "github-actions", "toolkit", "workflow"]
-categories   = ["api-bindings", "development-tools::build-utils"]
+name          = "actions-rs"
+version       = "0.1.0"
+edition       = "2024"
+rust-version  = "1.95"
+description   = "Zero-dependency toolkit for writing GitHub Actions in Rust: annotations, workflow commands, environment files, typed inputs and job summaries."
+authors       = ["Kaj Kowalski <info@kajkowalski.nl>"]
+license       = "MIT OR Apache-2.0"
+repository    = "https://github.com/kjanat/actions-rs"
+homepage      = "https://github.com/kjanat/actions-rs"
+readme        = "README.md"
+keywords      = ["actions", "ci", "github-actions", "toolkit", "workflow"]
+categories    = ["api-bindings", "development-tools::build-utils"]
+documentation = "https://docs.rs/actions-rs"
+exclude       = [".dprint.jsonc", ".github/", ".gitignore", ".zed/", "rustfmt.toml", "tombi.toml"]
 
 [dependencies]
 

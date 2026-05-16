@@ -132,15 +132,15 @@ fn main() -> actions_rs::Result<()> {
 
 ## Module map
 
-| Module       | Purpose                                                                                                           |
-| ------------ | ----------------------------------------------------------------------------------------------------------------- |
-| `log`        | annotations, `group`, `mask`/`set_secret`, `stop_commands`, `echo`, `set_failed`                                  |
-| `annotation` | `Annotation` builder (`AnnotationSpan`, file + line/column range + title)                                         |
-| `input`      | `input`, `input_required`, `bool_input`, `multiline_input`, `multiline_input_with`, `input_as::<T>`, `mask_input` |
-| `output`     | `set_output`, `save_state`, `get_state`, `export_var`, `add_path`, `overlay_var`, `overlay_path`, `apply_overlay` |
-| `summary`    | fluent `Summary` builder (`SummaryText::html` for raw HTML, 1 MiB guarded)                                        |
-| `env`        | `is_github_actions`/`is_ci`/`is_debug`, `RunnerOs`, `RunnerArch`, `Context`, `vars` constants                     |
-| `command`    | low-level `WorkflowCommand` for anything not covered above                                                        |
+| Module       | Purpose                                                                                                              |
+| ------------ | -------------------------------------------------------------------------------------------------------------------- |
+| `log`        | annotations, `group`, `mask`/`set_secret`, `stop_commands`, `echo`, `set_failed`/`fail_now`, `exit_code`/`is_failed` |
+| `annotation` | `Annotation` builder (`AnnotationSpan`, file + line/column range + title)                                            |
+| `input`      | `input`, `input_required`, `bool_input`, `multiline_input`, `multiline_input_with`, `input_as::<T>`, `mask_input`    |
+| `output`     | `set_output`, `save_state`, `get_state`, `export_var`, `add_path`, `overlay_var`, `overlay_path`, `apply_overlay`    |
+| `summary`    | fluent `Summary` builder (`SummaryText::html` for raw HTML, 1 MiB guarded)                                           |
+| `env`        | `is_github_actions`/`is_ci`/`is_debug`, `RunnerOs`, `RunnerArch`, `Context`, `vars` constants                        |
+| `command`    | low-level `WorkflowCommand` for anything not covered above                                                           |
 
 See [`examples/demo.rs`](./examples/demo.rs) for a runnable tour.
 
