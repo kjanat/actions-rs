@@ -38,6 +38,7 @@ jobs:
 
           echo "ok: tag ${RELEASE_TAG} matches Cargo.toml version ${manifest_version}"
 
+          # do NOT replace the tabs below with spaces... just foreshadowing...
           cat <<-ENV | tee -a "${GITHUB_OUTPUT}"
           	name=${pkg}
           	version=${manifest_version}
