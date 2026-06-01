@@ -1,10 +1,11 @@
 //! Ergonomic `format!`-style macros for the most common log calls.
 //!
 //! These are thin wrappers over [`crate::log`]; the functions remain available
-//! for composition and testing. Exported at the crate root, so call them as
-//! `actions_rs::warning!(...)`.
+//! for composition and testing. They are re-exported both at the crate root and
+//! from [`crate::log`], so call them as either `actions_rs::warning!(...)` or
+//! `actions_rs::log::warning!(...)`.
 
-/// `debug!("x = {x}")` → [`crate::log::debug`] with `format!` arguments.
+/// `debug!("x = {x}")` → [`crate::log::debug()`] with `format!` arguments.
 ///
 /// # Examples
 ///
@@ -17,7 +18,7 @@ macro_rules! debug {
     ($($arg:tt)*) => { $crate::log::debug(::std::format!($($arg)*)) };
 }
 
-/// `info!("...")` → [`crate::log::info`] with `format!` arguments.
+/// `info!("...")` → [`crate::log::info()`] with `format!` arguments.
 ///
 /// # Examples
 ///
@@ -30,7 +31,7 @@ macro_rules! info {
     ($($arg:tt)*) => { $crate::log::info(::std::format!($($arg)*)) };
 }
 
-/// `notice!("...")` → [`crate::log::notice`] with `format!` arguments.
+/// `notice!("...")` → [`crate::log::notice()`] with `format!` arguments.
 ///
 /// # Examples
 ///
@@ -42,7 +43,7 @@ macro_rules! notice {
     ($($arg:tt)*) => { $crate::log::notice(::std::format!($($arg)*)) };
 }
 
-/// `warning!("...")` → [`crate::log::warning`] with `format!` arguments.
+/// `warning!("...")` → [`crate::log::warning()`] with `format!` arguments.
 ///
 /// # Examples
 ///
@@ -55,7 +56,7 @@ macro_rules! warning {
     ($($arg:tt)*) => { $crate::log::warning(::std::format!($($arg)*)) };
 }
 
-/// `error!("...")` → [`crate::log::error`] with `format!` arguments.
+/// `error!("...")` → [`crate::log::error()`] with `format!` arguments.
 ///
 /// # Examples
 ///
@@ -83,6 +84,13 @@ macro_rules! group {
         $crate::log::group($name, || $body)
     };
 }
+
+// `#[macro_export]` publishes the macros at the crate root (e.g.
+// `actions_rs::group!`). These re-exports additionally give them a path inside
+// this module (`crate::macros::group`, …) so they can be surfaced from
+// [`crate::log`] next to the functions they wrap — `crate::macros::error`
+// resolves to the macro alone, sidestepping the `crate::error` module.
+pub use {debug, error, group, info, notice, warning};
 
 #[cfg(test)]
 mod tests {
