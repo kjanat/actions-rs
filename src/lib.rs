@@ -51,8 +51,7 @@ mod escape;
 mod file_command;
 pub mod input;
 pub mod log;
-#[doc(hidden)]
-pub mod macros;
+mod macros;
 pub mod output;
 pub mod summary;
 
