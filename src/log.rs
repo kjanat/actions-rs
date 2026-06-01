@@ -4,12 +4,20 @@
 //! A failed stdout write inside an action is unrecoverable, so these functions are intentionally
 //! **infallible** — mirroring `@actions/core`.\
 //! Fallible operations live in [`crate::output`] and [`crate::summary`].
+//!
+//! For raw or custom workflow commands, see [`crate::command::WorkflowCommand`].
 
 use std::io::{self, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::command::WorkflowCommand;
 use crate::env;
+
+// `format!`-style shortcuts for the logging functions in this module, surfaced
+// here (and at the crate root) next to the functions they wrap — e.g. `group!`
+// wraps `group`, `warning!` wraps `warning`.
+#[doc(inline)]
+pub use crate::macros::{debug, error, group, info, notice, warning};
 
 /// Process-global failure flag, the Rust analogue of `@actions/core`'s `process.exitCode = ExitCode.Failure`.
 /// Set by [`set_failed`], read by [`exit_code`] / [`is_failed`].
@@ -204,7 +212,7 @@ pub fn echo(on: bool) {
 }
 
 /// Begin a collapsible log group.
-/// Prefer [`group`], which closes the group automatically even on panic.
+/// Prefer [`group()`], which closes the group automatically even on panic.
 ///
 /// # Examples
 ///
@@ -345,5 +353,13 @@ mod tests {
             group("boom", || panic!("inside"));
         });
         assert!(r.is_err(), "panic should propagate after group closes");
+    }
+
+    #[test]
+    fn group_macro_is_reachable_via_log_path() {
+        // Regression: the `format!`-style macros are re-exported into `log`, so
+        // `crate::log::group!` (i.e. `actions_rs::log::group!`) resolves.
+        let answer = crate::log::group!("compute", { 6 * 7 });
+        assert_eq!(answer, 42);
     }
 }

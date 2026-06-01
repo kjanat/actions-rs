@@ -7,7 +7,7 @@
 //! It speaks the GitHub Actions *workflow-command* and *environment-file* protocols so your action can:
 //!
 //! - emit `notice` / `warning` / `error` annotations with file + line/column ranges ([`Annotation`], [`log`]),
-//! - group and mask log output, and pause command interpretation ([`log::group`], [`log::mask`], [`log::stop_commands`]),
+//! - group and mask log output, and pause command interpretation ([`log::group()`], [`log::mask`], [`log::stop_commands`]),
 //! - read typed, validated inputs ([`input`]),
 //! - set step outputs, saved state, env vars and `PATH` ([`output`]) — using modern env files,
 //!   with deprecated-command fallback only for output/state,
@@ -33,7 +33,7 @@
 //!     .title("example")
 //!     .warning("this is just a demo");
 //!
-//! // `format!`-style macros are exported at the crate root.
+//! // `format!`-style macros are exported at the crate root (and re-exported under `log`).
 //! actions_rs::warning!("disk {}% full", 92);
 //!
 //! // A group that closes even if the closure panics.
@@ -66,11 +66,11 @@ pub use summary::{Cell, Summary, SummaryText};
 pub mod prelude {
     pub use crate::error::{Error, Result};
     pub use crate::input::InputOptions;
+    pub use crate::macros::{debug, error, group, info, notice, warning};
     pub use crate::summary::{Cell, Summary, SummaryText};
     pub use crate::{
         Annotation, AnnotationKind, AnnotationSpan, Context, RunnerArch, RunnerOs, WorkflowCommand,
     };
-    pub use crate::{debug, error, group, info, notice, warning};
     pub use crate::{env, input, log, output};
 }
 
