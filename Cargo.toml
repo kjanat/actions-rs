@@ -14,7 +14,7 @@ repository    = "https://github.com/kjanat/actions-rs"
 license       = "MIT OR Apache-2.0"
 keywords      = ["actions", "ci", "github-actions", "toolkit", "workflow"]
 categories    = ["api-bindings", "development-tools::build-utils"]
-include       = ["/LICENSE-*", "/README.md", "/CHANGELOG.md", "/examples", "/src", "/tests"]
+include       = ["/CHANGELOG.md", "/LICENSE-*", "/README.md", "/examples", "/src", "/tests"]
 
 [lints]
 clippy.all        = "warn"
