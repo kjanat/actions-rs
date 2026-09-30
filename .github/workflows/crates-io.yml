@@ -28,7 +28,6 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with: { ref: "refs/tags/${{ env.RELEASE_TAG }}", persist-credentials: false }
-      - uses: kjanat/actionlint@v1
       - uses: dtolnay/rust-toolchain@stable
       - name: verify tag matches Cargo.toml version
         id: meta

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-09-30
+
 ### Added
 
 - Add writer-aware `group_to`, `group_guard_to`, and `stop_commands_to` helpers
@@ -39,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   inputs, escaped summary text by default, and no unsafe same-process env
   mutation.
 
-[Unreleased]: https://github.com/kjanat/actions-rs/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/kjanat/actions-rs/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/kjanat/actions-rs/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/kjanat/actions-rs/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/kjanat/actions-rs/releases/tag/v0.1.0
