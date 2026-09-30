@@ -59,3 +59,32 @@ jobs:
       parallel: [*GIT, *RUN], *RST,
       { run: run selfcheck, shell: bash },
       { run: run selfcheck, shell: pwsh }]
+
+  cargo-script:
+    runs-on: ${{ matrix.os }}
+    strategy: { matrix: { os: [ubuntu-latest, windows-latest, macos-latest] } }
+    defaults: { run: { shell: "actions-shell cargo-script {0}" } }
+    steps:
+      - parallel: [*GIT, uses: dtolnay/rust-toolchain@nightly, uses: kjanat/actions-shells@v0]
+      - id: emit
+        run: |
+          ---
+          package.edition = "2024"
+          dependencies.actions-rs.path = '${{ github.workspace }}'
+          ---
+          fn main() -> Result<(), actions_rs::Error> {
+              actions_rs::output::set_output("answer", "42\nwith newline")?;
+              actions_rs::output::export_var("DEMO_FLAG", true)?;
+              actions_rs::output::add_path("/booga")
+          }
+      - env: { INPUT_ANSWER: "${{ steps.emit.outputs.answer }}" }
+        run: |
+          ---
+          package.edition = "2024"
+          dependencies.actions-rs.path = '${{ github.workspace }}'
+          ---
+          fn main() {
+              assert_eq!(actions_rs::input::input_required("answer").unwrap(), "42\nwith newline");
+              assert_eq!(std::env::var("DEMO_FLAG").unwrap(), "true");
+              assert!(std::env::var("PATH").unwrap().contains("booga"));
+          }
