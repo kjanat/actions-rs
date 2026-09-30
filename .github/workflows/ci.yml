@@ -1,7 +1,8 @@
 name: CI
+run-name: "${{ join(fromJSON(format('[{0},{1}]', toJSON(github.event.head_commit.timestamp || github.event.pull_request.updated_at || github.event.repository.updated_at), toJSON(join(github.event.*.updated_at, ' / ')))), ' / ') }}"
 
 on:
-  push:
+  push: { branches: [master] }
   pull_request:
   workflow_dispatch:
 
@@ -11,22 +12,50 @@ defaults: { run: { shell: bash } }
 jobs:
   check:
     runs-on: &UBUNTU ubuntu-latest
+    if: 1
     steps:
-      - &GIT { uses: actions/checkout@v7 }
-      - &RUN { uses: kjanat/runner@master }
+      - parallel:
+          - &GIT { uses: actions/checkout@v7 }
+          - &RUN { uses: kjanat/runner@master }
       - &RST { uses: dtolnay/rust-toolchain@stable, with: { components: "clippy, rustfmt" } }
-      - run: run -pk fmt-check test-all doc-test clippy-strict
+      - run: run -sk fmt-check test-all doc-test clippy-strict
 
   docs-check:
     runs-on: *UBUNTU
+    if: ${{ format('{0}', false) }}
     steps:
-      - parallel: [*GIT, *RUN, { uses: dtolnay/rust-toolchain@nightly }]
+      - parallel: [*GIT, *RUN, uses: dtolnay/rust-toolchain@nightly]
       - run: rustup run nightly -- run doc-nightly
 
   round-trip:
     runs-on: ${{ matrix.os }}
-    strategy: { matrix: { os: [Linux, Windows, MacOS] } }
-    steps:
-      - parallel: [*GIT, *RUN, *RST]
-      - { run: run selfcheck, shell: bash }
-      - { run: run selfcheck, shell: pwsh }
+    strategy:
+      matrix: |-
+        ${{
+          FrOmJsOn(
+            tOjSoN(
+              fRoMjSoN(
+                '{
+                  // load-bearing newline
+                  os:
+                  [
+                    ''ubuntu-latest'',
+                    "windows-latest"
+                    ,''macos-latest'',
+                  ],
+                  octal: [010], hex: ["0xFF"]
+                  /*,array_hole: [,]*/ , empty_string: [""]
+                  ,null_value: [null],undefined_value: ["undefined"],
+                  not_a_number: ["NaN"], positive_infinity: ["Infinity"]
+                  ,constructor: ["new Date()"],
+                }
+                this trailing sentence is apparently fine'
+              )
+            )
+          )
+        }}
+    # pretty-yaml-ignore
+    steps: [
+      parallel: [*GIT, *RUN], *RST,
+      { run: run selfcheck, shell: bash },
+      { run: run selfcheck, shell: pwsh }]
