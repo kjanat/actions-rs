@@ -200,7 +200,7 @@ fn main() -> actions_rs::Result<()> {
 
 ## Replay on stderr
 
-Use `group_guard_to` and `stop_commands_to` to replay failed-task output on stderr
+Use `group_guard_to` and the group's `stop_commands()` method to replay failed-task output on stderr
 while keeping stdout usable by pipes and command substitutions. Both guards
 implement `io::Write`: write through them while they borrow the destination, and
 nest the suspension guard inside the group so commands resume before the group closes.
@@ -213,7 +213,7 @@ use std::io::{self, Read, Write};
 fn replay_failed_task(mut replay: impl Read) -> io::Result<()> {
     let mut stderr = io::stderr().lock();
     let mut group = log::group_guard_to("failed task", &mut stderr)?;
-    let mut stopped = log::stop_commands_to(&mut group)?;
+    let mut stopped = group.stop_commands()?;
     io::copy(&mut replay, &mut stopped)?;
     stopped.finish()?;
     group.finish()?;
@@ -222,7 +222,9 @@ fn replay_failed_task(mut replay: impl Read) -> io::Result<()> {
 ```
 
 Replay bytes stream unchanged, including non-UTF-8 data and literal `::error::`
-lines. Opening markers must start at a line boundary. Finishing or dropping a
+lines. Opening markers must start at a line boundary; `group.stop_commands()`
+completes any partial group line before the stop marker. Bare `stop_commands_to`
+still requires the caller to establish this boundary. Finishing or dropping a
 guard adds a separating newline before its closing marker when the body has no
 final `\n`. The stop/resume token is randomly generated as in `stop_commands`.
 
@@ -230,8 +232,11 @@ Opening and explicit `finish()` propagate write errors. Drop attempts cleanup on
 early return or panic and ignores I/O errors. A failed explicit finish is not
 retried on drop, avoiding duplicate partial markers. If `group_to`'s body and
 closing both fail, it returns the body error after attempting to close the group.
-The helpers do not flush automatically: flush through a guard for live output,
-and flush the destination after finishing to deliver buffered closing markers.
+Guards do not flush automatically: flush through a guard for live output,
+and flush the writer returned by `finish()` to deliver buffered closing markers
+and observe flush errors, including when the guard owns a `BufWriter`.
+The `group_to` closure helper flushes the writer after closing and propagates
+flush errors unless the body already failed.
 
 ## Module map
 

@@ -26,9 +26,10 @@ fn custom_writer_isolation() {
     if std::env::var_os(CHILD).is_some() {
         let mut output = Vec::new();
         group_to("isolated", &mut output, |group| {
-            let mut stopped = stop_commands_to(group)?;
+            let mut stopped = group.stop_commands()?;
             stopped.write_all(b"::error::literal replay\n")?;
-            stopped.finish()
+            stopped.finish()?;
+            Ok(())
         })
         .unwrap();
         let prefix = b"::group::isolated\n";
@@ -96,7 +97,7 @@ fn closing_markers_have_line_boundaries() {
     for payload in [b"".as_slice(), b"tail", b"tail\n", b"tail\r"] {
         let mut output = Vec::new();
         let mut group = group_guard_to("replay", &mut output).unwrap();
-        let mut stopped = stop_commands_to(&mut group).unwrap();
+        let mut stopped = group.stop_commands().unwrap();
         stopped.write_all(payload).unwrap();
         // An empty write must not forget a previously incomplete line.
         assert_eq!(stopped.write(b"").unwrap(), 0);
@@ -124,7 +125,7 @@ fn closing_markers_have_line_boundaries() {
 
 fn early_return(output: &mut Vec<u8>) -> io::Result<()> {
     let mut group = group_guard_to("early", output)?;
-    let mut stopped = stop_commands_to(&mut group)?;
+    let mut stopped = group.stop_commands()?;
     stopped.write_all(b"::warning::unfinished")?;
     Err(io::Error::other("body failed"))
 }
@@ -136,7 +137,7 @@ fn nested_scopes_cleanup_on_early_return_and_panic() {
         if panic {
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 group_to("early", &mut output, |group| -> io::Result<()> {
-                    let mut stopped = stop_commands_to(group)?;
+                    let mut stopped = group.stop_commands()?;
                     stopped.write_all(b"::warning::unfinished")?;
                     panic!("body panicked");
                 })
@@ -174,6 +175,7 @@ fn group_closes_when_body_returns_error() {
     assert_eq!(output, b"::group::build\ntail\n::endgroup::\n");
 }
 
+#[derive(Debug)]
 struct TestWriter {
     output: Vec<u8>,
     budget: Rc<Cell<usize>>,
@@ -224,7 +226,7 @@ fn accepts_borrowed_trait_object_and_short_writes() {
     writer.chunk = 1;
     let destination: &mut dyn Write = &mut writer;
     let mut group = group_guard_to("short", destination).unwrap();
-    let mut stopped = stop_commands_to(&mut group).unwrap();
+    let mut stopped = group.stop_commands().unwrap();
     stopped.write_all(b"first\nlast\xff").unwrap();
     stopped.finish().unwrap();
     group.finish().unwrap();
@@ -351,7 +353,7 @@ fn group_to_reports_closing_failure_and_preserves_body_error() {
 fn flushing_is_explicit_and_flush_errors_propagate() {
     let mut writer = TestWriter::new();
     let mut group = group_guard_to("buffered", &mut writer).unwrap();
-    let mut stopped = stop_commands_to(&mut group).unwrap();
+    let mut stopped = group.stop_commands().unwrap();
     stopped.write_all(b"live\n").unwrap();
     stopped.flush().unwrap();
     stopped.finish().unwrap();
@@ -364,4 +366,114 @@ fn flushing_is_explicit_and_flush_errors_propagate() {
     let mut stopped = stop_commands_to(&mut writer).unwrap();
     assert_eq!(stopped.flush().unwrap_err().to_string(), "flush failed");
     stopped.finish().unwrap();
+}
+
+#[test]
+fn group_stop_commands_completes_partial_lines() {
+    for body in [b"".as_slice(), b"tail", b"tail\n", b"tail\r"] {
+        let mut writer = TestWriter::new();
+        writer.chunk = 1;
+        let mut group = group_guard_to("x", &mut writer).unwrap();
+        group.write_all(body).unwrap();
+        let mut stopped = group.stop_commands().unwrap();
+        stopped.write_all(b"::error::replayed\n").unwrap();
+        stopped.finish().unwrap();
+        group.finish().unwrap();
+
+        let mut prefix = b"::group::x\n".to_vec();
+        prefix.extend_from_slice(body);
+        if !body.is_empty() && !body.ends_with(b"\n") {
+            prefix.push(b'\n');
+        }
+        assert!(writer.output.starts_with(&prefix));
+        let token = stop_token(&writer.output[prefix.len()..]);
+        let mut expected = prefix;
+        expected.extend_from_slice(
+            format!("::stop-commands::{token}\n::error::replayed\n::{token}::\n::endgroup::\n")
+                .as_bytes(),
+        );
+        assert_eq!(writer.output, expected);
+    }
+}
+
+#[test]
+fn group_stop_commands_reports_separator_and_opening_errors() {
+    for limit in [0, 1, 5] {
+        let mut writer = TestWriter::new();
+        let budget = writer.budget.clone();
+        let mut group = group_guard_to("x", &mut writer).unwrap();
+        group.write_all(b"tail").unwrap();
+        budget.set(limit);
+        let error = group.stop_commands().err().unwrap();
+        assert_eq!(error.kind(), io::ErrorKind::BrokenPipe);
+        budget.set(usize::MAX);
+        group.finish().unwrap();
+        let mut expected = b"::group::x\ntail".to_vec();
+        expected.extend_from_slice(&b"\n::stop-commands::"[..limit]);
+        if limit != 1 {
+            expected.push(b'\n');
+        }
+        expected.extend_from_slice(b"::endgroup::\n");
+        assert_eq!(writer.output, expected);
+    }
+}
+
+#[test]
+fn finish_returns_owned_buffers_for_fallible_flush_and_recovery() {
+    for stop in [false, true] {
+        let writer = TestWriter::new();
+        let budget = writer.budget.clone();
+        let buffer = io::BufWriter::new(writer);
+        let mut buffer = if stop {
+            let mut stopped = stop_commands_to(buffer).unwrap();
+            stopped.write_all(b"tail").unwrap();
+            stopped.finish().unwrap()
+        } else {
+            let mut group = group_guard_to("owned", buffer).unwrap();
+            group.write_all(b"tail").unwrap();
+            group.finish().unwrap()
+        };
+        // The owned buffer is still alive, with closing markers pending.
+        assert!(buffer.get_ref().output.is_empty());
+        budget.set(0);
+        assert_eq!(
+            buffer.flush().unwrap_err().kind(),
+            io::ErrorKind::BrokenPipe
+        );
+        budget.set(usize::MAX);
+        buffer.flush().unwrap();
+        let output = &buffer.get_ref().output;
+        if stop {
+            let token = stop_token(output);
+            assert_eq!(
+                output,
+                format!("::stop-commands::{token}\ntail\n::{token}::\n").as_bytes()
+            );
+        } else {
+            assert_eq!(output, b"::group::owned\ntail\n::endgroup::\n");
+        }
+    }
+}
+
+#[test]
+fn group_to_flushes_owned_buffers_and_preserves_body_errors() {
+    for body_fails in [false, true] {
+        let writer = TestWriter::new();
+        let budget = writer.budget.clone();
+        let result = group_to("owned", io::BufWriter::new(writer), |group| {
+            group.write_all(b"tail")?;
+            budget.set(0);
+            if body_fails {
+                Err(io::Error::other("body failed"))
+            } else {
+                Ok(())
+            }
+        });
+        let error = result.unwrap_err();
+        if body_fails {
+            assert_eq!(error.to_string(), "body failed");
+        } else {
+            assert_eq!(error.kind(), io::ErrorKind::BrokenPipe);
+        }
+    }
 }

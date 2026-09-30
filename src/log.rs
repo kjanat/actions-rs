@@ -6,11 +6,13 @@
 //! writer remains usable through the guard, including for nested scopes and binary data.
 //!
 //! Commands must begin on a new line. Start a writer-aware scope at a line boundary;
-//! finishing or dropping its guard adds a separating newline if the last body byte was
-//! not `\n`. Body bytes are otherwise written unchanged. No implicit flushing occurs:
+//! [`GroupGuardTo::stop_commands`] ensures this boundary before suspending a group.
+//! Finishing or dropping its guard adds a separating newline if the last body byte was
+//! not `\n`. Body bytes are otherwise written unchanged. Guards do not flush implicitly:
 //! call [`Write::flush`] through a guard for live output, or on the writer after finishing
-//! to deliver buffered closing markers. Drop cleanup is best-effort; use `finish()` to
-//! observe closing errors.
+//! to deliver buffered closing markers. `finish()` returns the writer, including owned
+//! buffers; [`group_to`] flushes after closing. Drop cleanup is best-effort; use `finish()`
+//! to observe closing errors.
 //!
 //! For raw or custom workflow commands, see [`crate::command::WorkflowCommand`].
 
@@ -302,7 +304,7 @@ pub fn group<R>(name: impl Into<String>, f: impl FnOnce() -> R) -> R {
 // writes share one destination. Track only the last successfully written byte;
 // even partial writes and non-UTF-8 data need no buffering.
 struct WriterScope<W: Write> {
-    writer: W,
+    writer: Option<W>,
     closing: String,
     line_start: bool,
     finished: bool,
@@ -311,26 +313,39 @@ struct WriterScope<W: Write> {
 impl<W: Write> WriterScope<W> {
     fn new(writer: W, closing: String) -> Self {
         Self {
-            writer,
+            writer: Some(writer),
             closing,
             line_start: true,
             finished: false,
         }
     }
 
-    fn finish(&mut self) -> io::Result<()> {
+    fn writer(&mut self) -> &mut W {
+        self.writer.as_mut().expect("scope owns its writer")
+    }
+
+    fn close(&mut self) -> io::Result<()> {
         // Do not retry a partially written closing marker from Drop.
         self.finished = true;
         if !self.line_start {
-            self.writer.write_all(b"\n")?;
+            self.writer().write_all(b"\n")?;
         }
-        writeln!(self.writer, "{}", self.closing)
+        writeln!(
+            self.writer.as_mut().expect("scope owns its writer"),
+            "{}",
+            self.closing
+        )
+    }
+
+    fn finish(mut self) -> io::Result<W> {
+        self.close()?;
+        Ok(self.writer.take().expect("scope owns its writer"))
     }
 }
 
 impl<W: Write> Write for WriterScope<W> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let written = self.writer.write(buf)?;
+        let written = self.writer().write(buf)?;
         if written != 0 {
             self.line_start = buf[written - 1] == b'\n';
         }
@@ -338,14 +353,14 @@ impl<W: Write> Write for WriterScope<W> {
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        self.writer.flush()
+        self.writer().flush()
     }
 }
 
 impl<W: Write> Drop for WriterScope<W> {
     fn drop(&mut self) {
         if !self.finished {
-            let _ = self.finish();
+            let _ = self.close();
         }
     }
 }
@@ -355,19 +370,80 @@ impl<W: Write> Drop for WriterScope<W> {
 /// Implements [`Write`]: write body bytes through this guard while it owns or borrows
 /// the destination. Drop closes the group best-effort, including on early return or
 /// panic. See the [module documentation](self) for line-boundary and flushing rules.
+///
+/// # Examples
+///
+/// ```
+/// use actions_rs::log;
+/// use std::io::Write;
+///
+/// let mut output = Vec::new();
+/// {
+///     let mut group: log::GroupGuardTo<_> = log::group_guard_to("build", &mut output)?;
+///     group.write_all(b"working")?;
+/// } // drop writes a separating newline and closes the group
+/// assert_eq!(output, b"::group::build\nworking\n::endgroup::\n");
+/// # Ok::<(), std::io::Error>(())
+/// ```
 #[must_use = "the group ends when this guard is dropped"]
 pub struct GroupGuardTo<W: Write>(WriterScope<W>);
 
 impl<W: Write> GroupGuardTo<W> {
-    /// Consume the guard and write `::endgroup::` to its destination.
+    /// Consume the guard, write `::endgroup::`, and return its destination.
     ///
     /// Adds a separating newline when needed, without flushing. The closing write
     /// is attempted once; drop does not retry if it fails partway through.
+    /// Flush the returned writer to observe delivery errors from owned buffers.
     ///
     /// # Errors
     /// Propagates any write error from the destination.
-    pub fn finish(mut self) -> io::Result<()> {
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use actions_rs::log;
+    /// use std::io::Write;
+    ///
+    /// let mut group = log::group_guard_to("build", Vec::new())?;
+    /// group.write_all(b"tail")?;
+    /// let mut output = group.finish()?;
+    /// output.flush()?;
+    /// assert_eq!(output, b"::group::build\ntail\n::endgroup::\n");
+    /// # Ok::<(), std::io::Error>(())
+    /// ```
+    pub fn finish(self) -> io::Result<W> {
         self.0.finish()
+    }
+
+    /// Suspend workflow commands in this group, first completing any partial line.
+    ///
+    /// Write replay bytes through the returned guard, then finish or drop it before
+    /// closing this group. Unlike bare [`stop_commands_to`], this method knows the
+    /// group's line state and inserts a newline before the stop marker if needed.
+    ///
+    /// # Errors
+    /// Propagates separator and opening marker write errors.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use actions_rs::log;
+    /// use std::io::Write;
+    ///
+    /// let mut group = log::group_guard_to("replay", Vec::new())?;
+    /// group.write_all(b"tail")?;
+    /// let mut stopped = group.stop_commands()?; // completes "tail" before the marker
+    /// stopped.write_all(b"::error::literal\n")?;
+    /// stopped.finish()?;
+    /// let output = group.finish()?;
+    /// assert!(output.starts_with(b"::group::replay\ntail\n::stop-commands::"));
+    /// # Ok::<(), std::io::Error>(())
+    /// ```
+    pub fn stop_commands(&mut self) -> io::Result<StopGuardTo<&mut Self>> {
+        if !self.0.line_start {
+            self.write_all(b"\n")?;
+        }
+        stop_commands_to(self)
     }
 }
 
@@ -421,11 +497,13 @@ pub fn group_guard_to<W: Write>(
 /// Run `f` inside a group on `writer`, passing a writable guard to the closure.
 ///
 /// Opening, body and closing output all use `writer`. Closes the group even when
-/// the closure returns an error or panics. On panic, cleanup is best-effort.
+/// the closure returns an error or panics. Flushes the writer after successful closing,
+/// even if the body failed, so errors delivering owned buffers remain observable.
+/// On panic, cleanup is best-effort.
 ///
 /// # Errors
-/// Propagates opening, body or closing errors. If both the body and closing fail,
-/// returns the body's error after attempting to close the group.
+/// Propagates opening, body, closing or flushing errors. If the body fails, returns
+/// its error after attempting to close and flush the group.
 ///
 /// # Examples
 ///
@@ -449,7 +527,7 @@ pub fn group_to<W: Write, R>(
 ) -> io::Result<R> {
     let mut guard = group_guard_to(name, writer)?;
     let result = f(&mut guard);
-    let closing = guard.finish();
+    let closing = guard.finish().and_then(|mut writer| writer.flush());
     let value = result?;
     closing?;
     Ok(value)
@@ -507,18 +585,51 @@ pub fn stop_commands() -> StopGuard {
 /// borrowed or owned writer. Drop resumes command processing best-effort, including
 /// on early return or panic. See the [module documentation](self) for line boundaries
 /// and flushing.
+///
+/// # Examples
+///
+/// ```
+/// use actions_rs::log;
+/// use std::io::Write;
+///
+/// let mut output = Vec::new();
+/// let replay = b"::error::literal\n";
+/// {
+///     let mut stopped: log::StopGuardTo<_> = log::stop_commands_to(&mut output)?;
+///     stopped.write_all(replay)?;
+/// } // drop emits the matching resume token
+/// assert!(output.windows(replay.len()).any(|bytes| bytes == replay));
+/// # Ok::<(), std::io::Error>(())
+/// ```
 #[must_use = "command processing resumes when this guard is dropped"]
 pub struct StopGuardTo<W: Write>(WriterScope<W>);
 
 impl<W: Write> StopGuardTo<W> {
-    /// Consume the guard and emit its matching resume token to the same destination.
+    /// Consume the guard, emit its matching resume token, and return its destination.
     ///
     /// Adds a separating newline when needed, without flushing. The closing write
     /// is attempted once; drop does not retry if it fails partway through.
+    /// Flush the returned writer to observe delivery errors from owned buffers.
     ///
     /// # Errors
     /// Propagates any write error from the destination.
-    pub fn finish(mut self) -> io::Result<()> {
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use actions_rs::log;
+    /// use std::io::Write;
+    ///
+    /// let mut stopped = log::stop_commands_to(Vec::new())?;
+    /// stopped.write_all(b"tail")?;
+    /// let mut output = stopped.finish()?;
+    /// output.flush()?;
+    /// let output = String::from_utf8(output).unwrap();
+    /// let token = output.lines().next().unwrap().strip_prefix("::stop-commands::").unwrap();
+    /// assert!(output.ends_with(&format!("tail\n::{token}::\n")));
+    /// # Ok::<(), std::io::Error>(())
+    /// ```
+    pub fn finish(self) -> io::Result<W> {
         self.0.finish()
     }
 }
@@ -540,10 +651,14 @@ impl<W: Write> Write for StopGuardTo<W> {
 /// This streams binary data without buffering or UTF-8 conversion.
 ///
 /// Open the group before suspending commands, resume before closing the group,
-/// and start opening markers at a line boundary. If replay lacks a final newline,
+/// and start opening markers at a line boundary. Inside a group, prefer
+/// [`GroupGuardTo::stop_commands`], which completes any partial group line before
+/// the stop marker. A bare writer's existing line state is unknown to this function.
+/// If replay lacks a final newline,
 /// `finish()` (or drop) inserts one before the resume marker. No implicit flushing
 /// occurs; flush through the guard for live output, and flush the destination after
-/// finishing to deliver buffered closing markers.
+/// finishing to deliver buffered closing markers. `finish()` returns owned writers
+/// as well as borrowed ones, allowing callers to observe their flush errors.
 ///
 /// # Errors
 /// Propagates opening write errors. No guard is returned on failure, so an opening
@@ -560,7 +675,7 @@ impl<W: Write> Write for StopGuardTo<W> {
 /// fn replay_failed_task(mut replay: impl Read) -> io::Result<()> {
 ///     let mut stderr = io::stderr().lock();
 ///     let mut group = log::group_guard_to("failed task", &mut stderr)?;
-///     let mut stopped = log::stop_commands_to(&mut group)?;
+///     let mut stopped = group.stop_commands()?;
 ///     io::copy(&mut replay, &mut stopped)?;
 ///     stopped.finish()?; // resume before emitting ::endgroup::
 ///     group.finish()?;

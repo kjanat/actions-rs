@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add writer-aware `group_to`, `group_guard_to`, and `stop_commands_to` helpers
+  for streaming log output on stderr or another `io::Write` destination.
+  Writable guards offer fallible finishing, return the writer for explicit
+  flushing, and attempt cleanup on drop. `GroupGuardTo::stop_commands()`
+  completes partial group lines before suspending command interpretation.
+
 ## [0.1.1] - 2026-06-01
 
 ### Added
