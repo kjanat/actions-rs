@@ -10,25 +10,23 @@ defaults: { run: { shell: bash } }
 
 jobs:
   check:
-    name: check
-    runs-on: ubuntu-latest
+    runs-on: &UBUNTU ubuntu-latest
     steps:
-      - { uses: actions/checkout@v6 }
-      - { uses: kjanat/runner@f605cb77aa28decc9d7b3c03e50ae47c0e061570 }
-      - { uses: dtolnay/rust-toolchain@stable, with: { components: "clippy, rustfmt" } }
-      - run: run fmt-check
-      - run: run test-all
-      - run: run doc-test
-      - run: run clippy-strict
-      - { uses: dtolnay/rust-toolchain@nightly }
+      - &GIT { uses: actions/checkout@v7 }
+      - &RUN { uses: kjanat/runner@master }
+      - &RST { uses: dtolnay/rust-toolchain@stable, with: { components: "clippy, rustfmt" } }
+      - run: run -pk fmt-check test-all doc-test clippy-strict
+
+  docs-check:
+    runs-on: *UBUNTU
+    steps:
+      - parallel: [*GIT, *RUN, { uses: dtolnay/rust-toolchain@nightly }]
       - run: rustup run nightly -- run doc-nightly
 
-  roundtrip:
-    name: round-trip
-    runs-on: ubuntu-latest
+  round-trip:
+    runs-on: ${{ matrix.os }}
+    strategy: { matrix: { os: [Linux, Windows, MacOS] } }
     steps:
-      - { uses: actions/checkout@v6 }
-      - { uses: kjanat/runner@f605cb77aa28decc9d7b3c03e50ae47c0e061570 }
-      - { uses: dtolnay/rust-toolchain@stable }
+      - parallel: [*GIT, *RUN, *RST]
       - { run: run selfcheck, shell: bash }
       - { run: run selfcheck, shell: pwsh }
