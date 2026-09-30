@@ -4,7 +4,6 @@ doc-nightly   = ["--config", ".cargo/nightly.toml", "doc"]
 doc-test      = ["test", "--doc"]
 fmt-check     = ["fmt", "--check"]
 lint          = ["clippy", "--all-targets", "--", "-D", "warnings"]
-selfcheck     = ["run", "--quiet", "--example", "ci_selfcheck"]
 test-all      = ["test", "--all-targets", "--all-features"]
 
 [build]

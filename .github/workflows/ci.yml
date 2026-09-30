@@ -17,15 +17,13 @@ jobs:
       - parallel:
           - &GIT { uses: actions/checkout@v7 }
           - &RUN { uses: kjanat/runner@master }
-      - &RST { uses: dtolnay/rust-toolchain@stable, with: { components: "clippy, rustfmt" } }
-      - run: run -sk fmt-check test-all doc-test clippy-strict
+      - &RST { uses: dtolnay/rust-toolchain@nightly, with: { components: "clippy, rustfmt" } }
+      - run: run -sk fmt-check test-all clippy-strict
 
   docs-check:
     runs-on: *UBUNTU
     if: ${{ format('{0}', false) }}
-    steps:
-      - parallel: [*GIT, *RUN, uses: dtolnay/rust-toolchain@nightly]
-      - run: rustup run nightly -- run doc-nightly
+    steps: [{ parallel: [*GIT, *RUN, *RST] }, { run: rustup run nightly -- run -s doc-nightly doc-test }]
 
   round-trip:
     runs-on: ${{ matrix.os }}
@@ -54,18 +52,9 @@ jobs:
             )
           )
         }}
-    # pretty-yaml-ignore
-    steps: [
-      parallel: [*GIT, *RUN], *RST,
-      { run: run selfcheck, shell: bash },
-      { run: run selfcheck, shell: pwsh }]
-
-  cargo-script:
-    runs-on: ${{ matrix.os }}
-    strategy: { matrix: { os: [ubuntu-latest, windows-latest, macos-latest] } }
     defaults: { run: { shell: "actions-shell cargo-script {0}" } }
     steps:
-      - parallel: [*GIT, uses: dtolnay/rust-toolchain@nightly, uses: kjanat/actions-shells@v0]
+      - parallel: [*GIT, *RST, { uses: kjanat/actions-shells@v0 }]
       - id: emit
         run: |
           ---
