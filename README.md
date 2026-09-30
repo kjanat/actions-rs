@@ -37,7 +37,7 @@ Annotation::new()
 Around that it provides the rest of the toolkit surface:
 
 - logging + panic-safe `group`, `mask`/`set_secret`, RAII `stop_commands`,
-  `echo`, `set_failed`/`fail_now`;
+  writer-aware `group_to`/`group_guard_to`/`stop_commands_to`, `echo`, `set_failed`/`fail_now`;
 - env files (`GITHUB_ENV`/`OUTPUT`/`STATE`/`PATH`) with a **collision-safe,
   std-only** random heredoc delimiter (the [CVE-2020-15228] injection class) and
   deprecated stdout fallback only for output/state; reserved-name guard; safe
@@ -56,8 +56,8 @@ Around that it provides the rest of the toolkit surface:
   properties, collision-checked random heredoc delimiters for multiline
   environment-file values (the [CVE-2020-15228] class of bug), strict YAML 1.2
   boolean inputs.
-- **Honest errors.** Filesystem/parse operations return `Result`; pure stdout
-  commands are infallible — no fake error channel.
+- **Honest errors.** Filesystem/parse operations return `Result`; writer-aware
+  log scopes return `io::Result`. Stdout convenience commands are infallible.
 - **Modern + compatible.** Uses `GITHUB_ENV`/`GITHUB_OUTPUT`/… directly; only
   `set_output` / `save_state` keep deprecated stdout fallbacks where GitHub
   still supports them.
@@ -85,8 +85,8 @@ sees; they change what the *calling process* can rely on:
    entry returns `Error::InvalidName` rather than silently injecting extra
    env-file entries (the [CVE-2020-15228] class). The heredoc delimiter is
    collision-checked → `Error::DelimiterCollision`.
-4. **Honest errors.** Filesystem/parse operations return `Result`; pure
-   stdout commands stay infallible. No swallowed errors, no fake channel.
+4. **Honest errors.** Filesystem/parse operations return `Result`; writer-aware
+   log scopes return `io::Result`. Stdout convenience commands stay infallible.
 5. **Summary escaped by default.** `Summary` HTML-escapes text and attributes;
    raw HTML is explicit opt-in via `SummaryText::html`. `@actions/core`
    concatenates raw HTML.
@@ -197,6 +197,46 @@ fn main() -> actions_rs::Result<()> {
     Ok(())
 }
 ```
+
+## Replay on stderr
+
+Use `group_guard_to` and the group's `stop_commands()` method to replay failed-task output on stderr
+while keeping stdout usable by pipes and command substitutions. Both guards
+implement `io::Write`: write through them while they borrow the destination, and
+nest the suspension guard inside the group so commands resume before the group closes.
+`group_to(name, writer, |group| ...)` also provides a fallible closure helper.
+
+```rust
+use actions_rs::log;
+use std::io::{self, Read, Write};
+
+fn replay_failed_task(mut replay: impl Read) -> io::Result<()> {
+    let mut stderr = io::stderr().lock();
+    let mut group = log::group_guard_to("failed task", &mut stderr)?;
+    let mut stopped = group.stop_commands()?;
+    io::copy(&mut replay, &mut stopped)?;
+    stopped.finish()?;
+    group.finish()?;
+    stderr.flush()
+}
+```
+
+Replay bytes stream unchanged, including non-UTF-8 data and literal `::error::`
+lines. Opening markers must start at a line boundary; `group.stop_commands()`
+completes any partial group line before the stop marker. Bare `stop_commands_to`
+still requires the caller to establish this boundary. Finishing or dropping a
+guard adds a separating newline before its closing marker when the body has no
+final `\n`. The stop/resume token is randomly generated as in `stop_commands`.
+
+Opening and explicit `finish()` propagate write errors. Drop attempts cleanup on
+early return or panic and ignores I/O errors. A failed explicit finish is not
+retried on drop, avoiding duplicate partial markers. If `group_to`'s body and
+closing both fail, it returns the body error after attempting to close the group.
+Guards do not flush automatically: flush through a guard for live output,
+and flush the writer returned by `finish()` to deliver buffered closing markers
+and observe flush errors, including when the guard owns a `BufWriter`.
+The `group_to` closure helper flushes the writer after closing and propagates
+flush errors unless the body already failed.
 
 ## Module map
 

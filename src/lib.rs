@@ -14,8 +14,8 @@
 //! - build a rich job summary ([`Summary`]),
 //! - detect and inspect the runtime ([`env`](mod@env)).
 //!
-//! Pure stdout commands are infallible;
-//! operations that touch the filesystem or parse input return [`Result`].
+//! Stdout convenience commands are infallible; writer-aware log scopes return
+//! [`std::io::Result`]. Operations that touch the filesystem or parse input return [`Result`].
 //!
 //! ## Quick start
 //!
