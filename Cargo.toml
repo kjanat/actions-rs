@@ -9,7 +9,6 @@ rust-version  = "1.95"
 description   = "Zero-dependency toolkit for writing GitHub Actions in Rust: annotations, workflow commands, environment files, typed inputs and job summaries."
 documentation = "https://docs.rs/actions-rs"
 readme        = "README.md"
-homepage      = "https://github.com/kjanat/actions-rs"
 repository    = "https://github.com/kjanat/actions-rs"
 license       = "MIT OR Apache-2.0"
 keywords      = ["actions", "ci", "github-actions", "toolkit", "workflow"]
