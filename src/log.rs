@@ -184,7 +184,6 @@ pub fn is_failed() -> bool {
 ///     actions_rs::log::exit_code()
 /// }
 /// ```
-#[must_use]
 pub fn exit_code() -> std::process::ExitCode {
     if is_failed() {
         std::process::ExitCode::FAILURE
